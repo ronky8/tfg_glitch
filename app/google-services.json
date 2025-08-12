@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "813498182071",
+    "project_id": "tfg-glitchfarm",
+    "storage_bucket": "tfg-glitchfarm.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813498182071:android:90f9cb8db58a8833e92032",
+        "android_client_info": {
+          "package_name": "com.pingu.tfg_glitch"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCn10s3b5CjsNyfwfyHQZzDc0qyLioB7vs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
