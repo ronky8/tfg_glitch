@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.material.icons.automirrored.filled.Help
+import kotlin.math.max
 
 
 // Instancias de servicios
@@ -221,8 +222,28 @@ fun PlayerActionsScreen(
                             contentPadding = PaddingValues(4.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                // Aquí podrías poner tu icono de cultivo en el futuro
                                 Text(text = crop.nombre, fontSize = 12.sp, textAlign = TextAlign.Center, color = PixelText)
+                                // NUEVO: Mostrar el precio de mercado actual
+                                game?.let { g ->
+                                    val marketKey = getCropMarketKey(crop.nombre)
+                                    val price = when (marketKey) {
+                                        "trigo" -> g.marketPrices.trigo
+                                        "maiz" -> g.marketPrices.maiz
+                                        "patata" -> g.marketPrices.patata
+                                        "tomateCuadrado" -> g.marketPrices.tomateCuadrado
+                                        "maizArcoiris" -> g.marketPrices.maizArcoiris
+                                        "brocoliCristal" -> g.marketPrices.brocoliCristal
+                                        "pimientoExplosivo" -> g.marketPrices.pimientoExplosivo
+                                        else -> 0
+                                    }
+                                    val displayPrice = if (g.signalInterferenceActive) max(1, price / 2) else price
+                                    Text(
+                                        text = "$displayPrice 💰",
+                                        fontSize = 14.sp,
+                                        color = GlitchLime,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -268,7 +289,7 @@ fun PlayerActionsScreen(
                             onClick = {
                                 coroutineScope.launch {
                                     showDiceRollAnimation = true
-                                    delay(1000) // Animación más corta
+                                    delay(250) // Animación aún más corta para mayor agilidad
                                     gameService.rollDice(currentPlayerId)
                                     showDiceRollAnimation = false
                                     keptDiceIndices.clear()
@@ -289,7 +310,7 @@ fun PlayerActionsScreen(
                                 onClick = {
                                     coroutineScope.launch {
                                         showDiceRollAnimation = true
-                                        delay(1000)
+                                        delay(250) // Animación aún más corta para mayor agilidad
                                         gameService.rerollDice(currentPlayerId, playerState.currentDiceRoll, keptDiceIndices.toList())
                                         showDiceRollAnimation = false
                                         keptDiceIndices.clear()

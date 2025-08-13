@@ -504,6 +504,8 @@ class GameService {
         var moneyChange = 0
         var energyChange = 0
         var mysteryEventsCount = 0
+        var plantCount = 0
+        var growthCount = 0
         val feedbackMessage = StringBuilder("Efectos de los dados aplicados:\n")
 
         for (symbol in diceResults) {
@@ -511,6 +513,8 @@ class GameService {
                 DadoSimbolo.MONEDA -> moneyChange += 2
                 DadoSimbolo.ENERGIA -> energyChange += 1
                 DadoSimbolo.MISTERIO -> mysteryEventsCount += 1
+                DadoSimbolo.PLANTAR -> plantCount += 1
+                DadoSimbolo.CRECIMIENTO -> growthCount += 1
                 else -> {}
             }
         }
@@ -528,8 +532,9 @@ class GameService {
 
         if (moneyChange > 0) feedbackMessage.append("Ganaste $moneyChange monedas.💰\n")
         if (energyChange > 0) feedbackMessage.append("Ganaste $energyChange energía Glitch.⚡\n")
-        if (diceResults.any { it == DadoSimbolo.CRECIMIENTO }) feedbackMessage.append("Obtuviste efectos de crecimiento (aplicar manualmente).➕\n")
-        if (diceResults.any { it == DadoSimbolo.GLITCH }) feedbackMessage.append("Obtuviste dados Glitch (resuelve físicamente).\n")
+        if (plantCount > 0) feedbackMessage.append("Puedes plantar $plantCount cultivo(s).🌱\n")
+        if (growthCount > 0) feedbackMessage.append("Puedes aplicar $growthCount crecimiento(s).➕\n")
+        if (diceResults.any { it == DadoSimbolo.GLITCH }) feedbackMessage.append("Obtuviste dados Glitch (resuelve físicamente).🌀\n")
         if (mysteryEventsCount > 0) feedbackMessage.append("Obtuviste $mysteryEventsCount dados de Misterio (resuelve en la app).❓\n")
 
         return feedbackMessage.toString()
@@ -593,6 +598,38 @@ class GameService {
             true
         } catch (e: Exception) {
             Log.e("GameService", "Failed to add crop to inventory for $playerId", e)
+            false
+        }
+    }
+
+    /**
+     * Removes a specified quantity of a crop from a player's inventory (Host action).
+     */
+    suspend fun removeCropFromInventory(playerId: String, cropId: String, quantityToRemove: Int): Boolean {
+        val playerRef = playersCollection.document(playerId)
+        return try {
+            db.runTransaction { transaction ->
+                val player = transaction.get(playerRef).toObject<Player>()
+                    ?: throw Exception("Player not found for inventory adjustment.")
+
+                val inventoryItem = player.inventario.find { it.id == cropId }
+                    ?: throw Exception("Crop not found in player's inventory.")
+
+                if (inventoryItem.cantidad < quantityToRemove) {
+                    throw Exception("Cannot remove more crops than the player has.")
+                }
+
+                inventoryItem.cantidad -= quantityToRemove
+
+                if (inventoryItem.cantidad == 0) {
+                    player.inventario.remove(inventoryItem)
+                }
+
+                transaction.set(playerRef, player)
+            }.await()
+            true
+        } catch (e: Exception) {
+            Log.e("GameService", "Failed to remove crop from inventory for player $playerId: ${e.message}", e)
             false
         }
     }
@@ -718,10 +755,7 @@ class GameService {
                     pimientoExplosivo = calculateNewPrice(currentPrices.pimientoExplosivo, basePrices["pimiento_explosivo"] ?: 8)
                 )
 
-                var newSignalInterferenceActive = false
-                if (game.signalInterferenceActive) {
-                    newSignalInterferenceActive = false
-                }
+                var newSignalInterferenceActive = false // Se resetea en cada ronda
 
                 var newEvent: GlitchEvent? = null
                 if (Random.nextDouble() < 0.60) {
@@ -741,21 +775,9 @@ class GameService {
                     "Interferencia de Señal" -> newSignalInterferenceActive = true
                 }
 
-                val finalPrices = if (newSignalInterferenceActive) {
-                    MarketPrices(
-                        trigo = max(1, newMarketPrices.trigo / 2),
-                        maiz = max(1, newMarketPrices.maiz / 2),
-                        patata = max(1, newMarketPrices.patata / 2),
-                        tomateCuadrado = max(1, newMarketPrices.tomateCuadrado / 2),
-                        maizArcoiris = max(1, newMarketPrices.maizArcoiris / 2),
-                        brocoliCristal = max(1, newMarketPrices.brocoliCristal / 2),
-                        pimientoExplosivo = max(1, newMarketPrices.pimientoExplosivo / 2),
-                    )
-                } else {
-                    newMarketPrices
-                }
-
-                game.marketPrices = finalPrices
+                // CORRECCIÓN: Guardar los precios normales, no los modificados por el evento.
+                // El efecto de "Interferencia de Señal" se aplicará en la UI.
+                game.marketPrices = newMarketPrices
                 game.lastEvent = newEvent
                 game.supplyFailureActive = newSupplyFailureActive
                 game.signalInterferenceActive = newSignalInterferenceActive
@@ -837,21 +859,8 @@ class GameService {
                     "Interferencia de Señal" -> newSignalInterferenceActive = true
                 }
 
-                val finalPrices = if (newSignalInterferenceActive) {
-                    MarketPrices(
-                        trigo = max(1, newMarketPrices.trigo / 2),
-                        maiz = max(1, newMarketPrices.maiz / 2),
-                        patata = max(1, newMarketPrices.patata / 2),
-                        tomateCuadrado = max(1, newMarketPrices.tomateCuadrado / 2),
-                        maizArcoiris = max(1, newMarketPrices.maizArcoiris / 2),
-                        brocoliCristal = max(1, newMarketPrices.brocoliCristal / 2),
-                        pimientoExplosivo = max(1, newMarketPrices.pimientoExplosivo / 2),
-                    )
-                } else {
-                    newMarketPrices
-                }
-
-                game.marketPrices = finalPrices
+                // CORRECCIÓN: Guardar los precios normales, no los modificados por el evento.
+                game.marketPrices = newMarketPrices
                 game.lastEvent = newEvent
                 game.supplyFailureActive = newSupplyFailureActive
                 game.signalInterferenceActive = newSignalInterferenceActive

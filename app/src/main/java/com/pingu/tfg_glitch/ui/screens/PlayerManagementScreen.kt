@@ -36,13 +36,15 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Remove
-import com.pingu.tfg_glitch.data.allObjectives // Importar la lista de objetivos globales
-import kotlin.math.roundToInt // Para redondear la división de PV
-import com.pingu.tfg_glitch.ui.theme.AccentGreen // Importación de color
-import com.pingu.tfg_glitch.ui.theme.GlitchRed // Importación de color
+import androidx.compose.material.icons.filled.RemoveCircleOutline
+import com.pingu.tfg_glitch.data.allCrops
+import com.pingu.tfg_glitch.data.allObjectives
+import kotlin.math.roundToInt
+import com.pingu.tfg_glitch.ui.theme.AccentGreen
+import com.pingu.tfg_glitch.ui.theme.GlitchRed
 
 
 // Instancias de servicios
@@ -135,7 +137,6 @@ fun PlayerManagementScreen(
                             player = player,
                             isHost = isHost,
                             currentPlayerId = currentPlayerId,
-                            onGameEnded = onGameEnded,
                             onAdjustResources = { targetPlayerId, moneyDelta, energyDelta ->
                                 coroutineScope.launch {
                                     val success = gameService.adjustPlayerResourcesManually(targetPlayerId, moneyDelta, energyDelta)
@@ -152,7 +153,7 @@ fun PlayerManagementScreen(
                                     }
                                 }
                             },
-                            onAdjustPV = { targetPlayerId, pvDelta -> // Nuevo callback para ajustar PV
+                            onAdjustPV = { targetPlayerId, pvDelta ->
                                 coroutineScope.launch {
                                     val success = gameService.adjustPlayerManualBonusPV(targetPlayerId, pvDelta)
                                     if (success) {
@@ -163,6 +164,24 @@ fun PlayerManagementScreen(
                                     } else {
                                         snackbarHostState.showSnackbar(
                                             message = "Error al ajustar PV de ${player.name}.",
+                                            duration = SnackbarDuration.Short
+                                        )
+                                    }
+                                }
+                            },
+                            onRemoveCrop = { targetPlayerId, cropId, quantity ->
+                                coroutineScope.launch {
+                                    val success = gameService.removeCropFromInventory(targetPlayerId, cropId, quantity)
+                                    val targetPlayer = allPlayers.find { it.id == targetPlayerId }
+                                    val crop = allCrops.find { it.id == cropId }
+                                    if (success) {
+                                        snackbarHostState.showSnackbar(
+                                            message = "Se eliminó $quantity ${crop?.nombre ?: "cultivo"} del inventario de ${targetPlayer?.name ?: "jugador"}.",
+                                            duration = SnackbarDuration.Short
+                                        )
+                                    } else {
+                                        snackbarHostState.showSnackbar(
+                                            message = "Error al eliminar cultivo.",
                                             duration = SnackbarDuration.Short
                                         )
                                     }
@@ -283,12 +302,11 @@ fun PlayerCard(
     player: Player,
     isHost: Boolean,
     currentPlayerId: String,
-    onGameEnded: () -> Unit,
     onAdjustResources: (String, Int, Int) -> Unit,
-    onAdjustPV: (String, Int) -> Unit // Callback para ajustar PV
+    onAdjustPV: (String, Int) -> Unit,
+    onRemoveCrop: (playerId: String, cropId: String, quantity: Int) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
     Card(
@@ -316,12 +334,7 @@ fun PlayerCard(
                         val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clipData = ClipData.newPlainText("Player ID", player.id)
                         clipboardManager.setPrimaryClip(clipData)
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(
-                                message = "ID de jugador copiado",
-                                duration = SnackbarDuration.Short
-                            )
-                        }
+                        // El snackbar se maneja en el padre, así que aquí no es necesario
                     },
                     modifier = Modifier.size(24.dp) // Tamaño del icono
                 ) {
@@ -346,9 +359,43 @@ fun PlayerCard(
                 Text(text = "PV Ajuste Manual: ${player.manualBonusPV} PV", fontSize = 14.sp, color = TextLight)
             }
 
-
-            // Sección para ajuste manual de PV (solo si es anfitrión)
+            // Sección de gestión para el anfitrión
             if (isHost) {
+                // Ajustar Inventario
+                if (player.inventario.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Ajustar Inventario (Manual):",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AccentPurple
+                    )
+                    player.inventario.forEach { item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "${item.nombre} (x${item.cantidad})",
+                                color = TextLight,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { onRemoveCrop(player.id, item.id, 1) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.RemoveCircleOutline,
+                                    contentDescription = "Eliminar 1 ${item.nombre}",
+                                    tint = GlitchRed
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Ajustar PV
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "Ajustar PV (Manual):",
@@ -361,7 +408,6 @@ fun PlayerCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Botón para restar PV
                     Button(
                         onClick = { onAdjustPV(player.id, -1) },
                         colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),
@@ -374,7 +420,6 @@ fun PlayerCard(
                         Text("-1 PV", fontSize = 14.sp, color = TextWhite)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    // Botón para sumar PV
                     Button(
                         onClick = { onAdjustPV(player.id, 1) },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
@@ -387,11 +432,8 @@ fun PlayerCard(
                         Text("+1 PV", fontSize = 14.sp, color = TextWhite)
                     }
                 }
-            }
 
-
-            // Sección para ajuste manual de Monedas y Energía (AHORA CON BOTONES +/-)
-            if (isHost) {
+                // Ajustar Monedas y Energía
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "Ajustar Monedas/Energía (Manual):",
@@ -404,7 +446,6 @@ fun PlayerCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Botón para restar 1 Moneda
                     Button(
                         onClick = { onAdjustResources(player.id, -1, 0) },
                         colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),
@@ -417,7 +458,6 @@ fun PlayerCard(
                         Text("-1 💰", fontSize = 14.sp, color = TextWhite)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    // Botón para sumar 1 Moneda
                     Button(
                         onClick = { onAdjustResources(player.id, 1, 0) },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
@@ -436,7 +476,6 @@ fun PlayerCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Botón para restar 1 Energía Glitch
                     Button(
                         onClick = { onAdjustResources(player.id, 0, -1) },
                         colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),
@@ -449,7 +488,6 @@ fun PlayerCard(
                         Text("-1 ⚡", fontSize = 14.sp, color = TextWhite)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    // Botón para sumar 1 Energía Glitch
                     Button(
                         onClick = { onAdjustResources(player.id, 0, 1) },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
@@ -473,7 +511,6 @@ fun PlayerCard(
                         coroutineScope.launch {
                             gameService.deletePlayer(player.id)
                             Log.d("PlayerManagementScreen", "Player ${player.name} (${player.id}) deleted by host.")
-                            // Snackbar eliminado aquí
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),

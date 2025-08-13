@@ -41,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.foundation.rememberScrollState // Importación necesaria
 import androidx.compose.foundation.verticalScroll // Importación necesaria
 import com.pingu.tfg_glitch.ui.components.MarketItem // Importar MarketItem desde el nuevo paquete
+import kotlin.math.max
 
 
 // Instancias de servicios
@@ -171,7 +172,9 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                                 .padding(8.dp), // Padding ligeramente reducido aquí
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            game?.marketPrices?.let { prices ->
+                            game?.let { g ->
+                                val prices = g.marketPrices
+                                val isInterference = g.signalInterferenceActive
                                 val cropList = listOf(
                                     "trigo" to prices.trigo,
                                     "maiz" to prices.maiz,
@@ -188,9 +191,12 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                                         horizontalArrangement = Arrangement.spacedBy(4.dp), // Espaciado reducido
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        MarketItem(cropList[i].first, cropList[i].second, modifier = Modifier.weight(1f))
+                                        val price1 = if(isInterference) max(1, cropList[i].second / 2) else cropList[i].second
+                                        MarketItem(cropList[i].first, price1, modifier = Modifier.weight(1f))
+
                                         if (i + 1 < cropList.size) {
-                                            MarketItem(cropList[i+1].first, cropList[i+1].second, modifier = Modifier.weight(1f))
+                                            val price2 = if(isInterference) max(1, cropList[i+1].second / 2) else cropList[i+1].second
+                                            MarketItem(cropList[i+1].first, price2, modifier = Modifier.weight(1f))
                                         } else {
                                             // Añadir un Spacer para ocupar el espacio si hay un número impar de ítems
                                             Spacer(modifier = Modifier.weight(1f))
@@ -229,7 +235,7 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                         ) {
                             currentPlayer!!.inventario.forEach { item -> // Usar forEach para Column
                                 val marketKey = com.pingu.tfg_glitch.data.getCropMarketKey(item.nombre)
-                                val currentPrice = when (marketKey) {
+                                val basePrice = when (marketKey) {
                                     "trigo" -> marketPrices.trigo
                                     "maiz" -> marketPrices.maiz
                                     "patata" -> marketPrices.patata
@@ -239,6 +245,8 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                                     "pimientoExplosivo" -> marketPrices.pimientoExplosivo
                                     else -> 0
                                 }
+                                val finalPrice = if (signalInterferenceActive) max(1, basePrice / 2) else basePrice
+
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -248,17 +256,17 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(text = "${item.nombre} (x${item.cantidad})", color = TextLight, fontSize = 16.sp)
-                                    Text(text = "Venta: $currentPrice 💰", color = TextLight, fontSize = 16.sp)
-                                    val buttonEnabled = item.cantidad > 0 && currentPrice > 0 && !isSelling && isMarketPhase && !hasPlayerFinishedMarket
+                                    Text(text = "Venta: $finalPrice 💰", color = TextLight, fontSize = 16.sp)
+                                    val buttonEnabled = item.cantidad > 0 && finalPrice > 0 && !isSelling && isMarketPhase && !hasPlayerFinishedMarket
                                     Button(
                                         onClick = {
                                             if (!isSelling) {
                                                 isSelling = true
                                                 coroutineScope.launch {
-                                                    val success = gameService.sellCrop(currentPlayerId, item.id, 1, currentPrice)
+                                                    val success = gameService.sellCrop(currentPlayerId, item.id, 1, finalPrice)
                                                     if (success) {
                                                         snackbarHostState.showSnackbar(
-                                                            message = "Vendiste 1 ${item.nombre} por $currentPrice monedas.",
+                                                            message = "Vendiste 1 ${item.nombre} por $finalPrice monedas.",
                                                             duration = SnackbarDuration.Short
                                                         )
                                                     } else {
@@ -422,40 +430,6 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
         }
     }
 }
-
-// Composable para cada elemento del mercado
-// Se ha movido a ui.components.MarketItem.kt
-/*
-@Composable
-fun MarketItem(cropName: String, price: Int, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF4A5568)),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = cropName.capitalizeWords(),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium,
-                color = AccentGreen
-            )
-            Text(
-                text = "$price 💰",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = AccentYellow
-            )
-        }
-    }
-}
-*/
 
 @Preview(showBackground = true)
 @Composable
