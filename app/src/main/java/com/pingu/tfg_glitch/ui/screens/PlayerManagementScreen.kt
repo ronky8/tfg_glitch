@@ -44,6 +44,7 @@ import com.pingu.tfg_glitch.data.allCrops
 import com.pingu.tfg_glitch.data.allObjectives
 import kotlin.math.roundToInt
 import com.pingu.tfg_glitch.ui.theme.AccentGreen
+import com.pingu.tfg_glitch.ui.theme.DarkBackground
 import com.pingu.tfg_glitch.ui.theme.GlitchRed
 
 
@@ -64,15 +65,12 @@ fun PlayerManagementScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Estado para controlar la visibilidad del diálogo de fin de partida
     var showEndGameDialog by remember { mutableStateOf(false) }
 
-    // Determina si el jugador actual es el anfitrión
     val isHost = remember(game, currentPlayerId) {
         game?.hostPlayerId == currentPlayerId
     }
 
-    // Determina si todos los jugadores han terminado en la fase de mercado
     val allPlayersFinishedMarket = remember(game, allPlayers) {
         game?.playersFinishedMarket?.size == allPlayers.size && allPlayers.isNotEmpty()
     }
@@ -95,13 +93,11 @@ fun PlayerManagementScreen(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Muestra un indicador de carga si la partida o los jugadores aún no se han cargado
             if (game == null || allPlayers.isEmpty()) {
                 CircularProgressIndicator(modifier = Modifier.size(48.dp), color = AccentPurple)
                 Text(text = "Cargando jugadores...", color = TextLight, modifier = Modifier.padding(top = 8.dp))
-                Spacer(modifier = Modifier.weight(1f)) // Empujar el contenido hacia arriba
+                Spacer(modifier = Modifier.weight(1f))
             } else {
-                // Mostrar quién tiene el turno actual (solo en fase de acciones)
                 val currentTurnPlayer = allPlayers.find { it.id == game?.currentPlayerTurnId }
                 val phaseText = when (game?.roundPhase) {
                     "PLAYER_ACTIONS" -> {
@@ -124,7 +120,6 @@ fun PlayerManagementScreen(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // Lista de jugadores
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -137,77 +132,52 @@ fun PlayerManagementScreen(
                             player = player,
                             isHost = isHost,
                             currentPlayerId = currentPlayerId,
+                            currentTurnPlayerId = game?.currentPlayerTurnId,
                             onAdjustResources = { targetPlayerId, moneyDelta, energyDelta ->
                                 coroutineScope.launch {
                                     val success = gameService.adjustPlayerResourcesManually(targetPlayerId, moneyDelta, energyDelta)
-                                    if (success) {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Recursos de ${player.name} ajustados.",
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    } else {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Error al ajustar recursos de ${player.name}.",
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    }
+                                    snackbarHostState.showSnackbar(
+                                        if (success) "Recursos de ${player.name} ajustados." else "Error al ajustar recursos."
+                                    )
                                 }
                             },
                             onAdjustPV = { targetPlayerId, pvDelta ->
                                 coroutineScope.launch {
                                     val success = gameService.adjustPlayerManualBonusPV(targetPlayerId, pvDelta)
-                                    if (success) {
-                                        snackbarHostState.showSnackbar(
-                                            message = "PV de ${player.name} ajustados.",
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    } else {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Error al ajustar PV de ${player.name}.",
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    }
+                                    snackbarHostState.showSnackbar(
+                                        if (success) "PV de ${player.name} ajustados." else "Error al ajustar PV."
+                                    )
                                 }
                             },
                             onRemoveCrop = { targetPlayerId, cropId, quantity ->
                                 coroutineScope.launch {
                                     val success = gameService.removeCropFromInventory(targetPlayerId, cropId, quantity)
-                                    val targetPlayer = allPlayers.find { it.id == targetPlayerId }
-                                    val crop = allCrops.find { it.id == cropId }
-                                    if (success) {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Se eliminó $quantity ${crop?.nombre ?: "cultivo"} del inventario de ${targetPlayer?.name ?: "jugador"}.",
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    } else {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Error al eliminar cultivo.",
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    }
+                                    snackbarHostState.showSnackbar(
+                                        if (success) "Cultivo eliminado del inventario." else "Error al eliminar cultivo."
+                                    )
+                                }
+                            },
+                            onForceTurn = {
+                                coroutineScope.launch {
+                                    gameService.forceAdvanceTurn(gameId)
+                                    snackbarHostState.showSnackbar(
+                                        message = "Turno de ${currentTurnPlayer?.name ?: "jugador"} forzado a pasar.",
+                                        duration = SnackbarDuration.Short
+                                    )
                                 }
                             }
                         )
                     }
                 }
 
-                // Botón para avanzar a la siguiente ronda (solo visible para el host y si todos terminaron el mercado)
                 if (isHost && game?.roundPhase == "MARKET_PHASE") {
                     Button(
                         onClick = {
                             coroutineScope.launch {
                                 val success = gameService.advanceRound(gameId)
-                                if (success) {
-                                    snackbarHostState.showSnackbar(
-                                        message = "¡Ronda avanzada! Nueva fase: Acciones de Jugador.",
-                                        duration = SnackbarDuration.Long
-                                    )
-                                } else {
-                                    snackbarHostState.showSnackbar(
-                                        message = "No se pudo avanzar la ronda. ¿Han terminado todos en el mercado?",
-                                        duration = SnackbarDuration.Long
-                                    )
-                                }
+                                snackbarHostState.showSnackbar(
+                                    if (success) "¡Ronda avanzada!" else "No se pudo avanzar la ronda. ¿Han terminado todos?"
+                                )
                             }
                         },
                         enabled = allPlayersFinishedMarket,
@@ -223,13 +193,9 @@ fun PlayerManagementScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-
-                // Botón para terminar la partida (solo visible para el host)
                 if (isHost) {
                     Button(
-                        onClick = {
-                            showEndGameDialog = true // Mostrar el diálogo de fin de partida
-                        },
+                        onClick = { showEndGameDialog = true },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(60.dp),
@@ -244,10 +210,9 @@ fun PlayerManagementScreen(
         }
     }
 
-    // Diálogo de confirmación para terminar la partida
     if (showEndGameDialog) {
         AlertDialog(
-            onDismissRequest = { showEndGameDialog = false }, // Permite cerrar el diálogo
+            onDismissRequest = { showEndGameDialog = false },
             title = { Text("¿Cómo quieres terminar la partida?") },
             text = { Text("Puedes terminar la partida calculando los puntos finales o de forma repentina sin puntuación.") },
             confirmButton = {
@@ -256,9 +221,7 @@ fun PlayerManagementScreen(
                         onClick = {
                             coroutineScope.launch {
                                 showEndGameDialog = false
-                                Log.d("PlayerManagementScreen", "Host chose to end game by points for gameId: $gameId")
-                                gameService.endGameByPoints(gameId) // Llama a la función para terminar por puntos
-                                // La navegación a FinalScoreScreen se activará por el LaunchedEffect en GameScreen
+                                gameService.endGameByPoints(gameId)
                             }
                         },
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -270,9 +233,7 @@ fun PlayerManagementScreen(
                         onClick = {
                             coroutineScope.launch {
                                 showEndGameDialog = false
-                                Log.d("PlayerManagementScreen", "Host chose to end game abruptly for gameId: $gameId")
-                                gameService.markGameAsEnded(gameId) // Llama a la función para terminar repentinamente
-                                // La navegación a FinalScoreScreen se activará por el LaunchedEffect en GameScreen
+                                gameService.markGameAsEnded(gameId)
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -296,18 +257,19 @@ fun PlayerManagementScreen(
     }
 }
 
-// Composable para la tarjeta de cada jugador
 @Composable
 fun PlayerCard(
     player: Player,
     isHost: Boolean,
     currentPlayerId: String,
+    currentTurnPlayerId: String?,
     onAdjustResources: (String, Int, Int) -> Unit,
     onAdjustPV: (String, Int) -> Unit,
-    onRemoveCrop: (playerId: String, cropId: String, quantity: Int) -> Unit
+    onRemoveCrop: (playerId: String, cropId: String, quantity: Int) -> Unit,
+    onForceTurn: () -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope() // CORRECCIÓN: Usar el scope de compose
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -322,21 +284,19 @@ fun PlayerCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "Nombre: ${player.name}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AccentYellow)
-                // Añadir "(Tú)" si es el jugador actual
                 if (player.id == currentPlayerId) {
                     Text(text = " (Tú)", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextLight)
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "ID: ${player.id.take(8)}...", fontSize = 14.sp, color = TextLight) // ID truncado
+                Text(text = "ID: ${player.id.take(8)}...", fontSize = 14.sp, color = TextLight)
                 IconButton(
                     onClick = {
                         val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clipData = ClipData.newPlainText("Player ID", player.id)
                         clipboardManager.setPrimaryClip(clipData)
-                        // El snackbar se maneja en el padre, así que aquí no es necesario
                     },
-                    modifier = Modifier.size(24.dp) // Tamaño del icono
+                    modifier = Modifier.size(24.dp)
                 ) {
                     Icon(Icons.Filled.ContentCopy, contentDescription = "Copiar ID de jugador", tint = TextLight)
                 }
@@ -344,7 +304,6 @@ fun PlayerCard(
             Text(text = "Monedas: ${player.money} 💰", fontSize = 16.sp, color = TextLight)
             Text(text = "Energía Glitch: ${player.glitchEnergy} ⚡", fontSize = 16.sp, color = TextLight)
 
-            // Calcular y mostrar PV Total aquí
             val moneyPV = player.money / 5
             val totalUnsoldValue = player.inventario.sumOf { it.valorVentaBase * it.cantidad }
             val unsoldCropsPV = (totalUnsoldValue.toDouble() / 3.0).roundToInt()
@@ -359,9 +318,7 @@ fun PlayerCard(
                 Text(text = "PV Ajuste Manual: ${player.manualBonusPV} PV", fontSize = 14.sp, color = TextLight)
             }
 
-            // Sección de gestión para el anfitrión
             if (isHost) {
-                // Ajustar Inventario
                 if (player.inventario.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
@@ -395,7 +352,6 @@ fun PlayerCard(
                     }
                 }
 
-                // Ajustar PV
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "Ajustar PV (Manual):",
@@ -433,7 +389,6 @@ fun PlayerCard(
                     }
                 }
 
-                // Ajustar Monedas y Energía
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "Ajustar Monedas/Energía (Manual):",
@@ -502,8 +457,18 @@ fun PlayerCard(
                 }
             }
 
+            if (isHost && player.id == currentTurnPlayerId && player.id != currentPlayerId) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onForceTurn,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Forzar Pasar Turno (Host)", color = DarkBackground, fontWeight = FontWeight.Bold)
+                }
+            }
 
-            // Botón de eliminar jugador (solo si es anfitrión y no es el propio anfitrión)
             if (isHost && player.id != currentPlayerId) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(

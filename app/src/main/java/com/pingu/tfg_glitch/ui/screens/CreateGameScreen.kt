@@ -12,17 +12,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pingu.tfg_glitch.data.GameService
-import com.pingu.tfg_glitch.ui.theme.AccentPurple
-import com.pingu.tfg_glitch.ui.theme.AccentYellow
-import com.pingu.tfg_glitch.ui.theme.DarkCard
-import com.pingu.tfg_glitch.ui.theme.GlitchRed
-import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
-import com.pingu.tfg_glitch.ui.theme.TextLight
-import com.pingu.tfg_glitch.ui.theme.TextWhite
+import com.pingu.tfg_glitch.ui.theme.*
 import kotlinx.coroutines.launch
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -36,23 +31,19 @@ private val gameService = GameService()
 fun CreateGameScreen(
     onGameCreated: (String, String) -> Unit // Pasa el ID de la partida y el ID del jugador anfitrión
 ) {
-    // Estado para el nombre del anfitrión
     var hostNameInput by remember { mutableStateOf("") }
-    // Estado para el código de partida generado
+    var selectedFarmer by remember { mutableStateOf<String?>(null) } // NUEVO: Estado para el granjero
     var generatedGameCode by remember { mutableStateOf<String?>(null) }
-    // Estado para el ID del jugador anfitrión generado
     var generatedHostPlayerId by remember { mutableStateOf<String?>(null) }
-    // Estado para controlar si se debe mostrar la pantalla del código de partida
     var showGameCodeDisplay by remember { mutableStateOf(false) }
-    // Estado para controlar la carga
     var isLoading by remember { mutableStateOf(false) }
-    // Estado para mostrar un mensaje de error
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Scope para lanzar corrutinas
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val farmers = listOf("Ingeniero Glitch", "Botánica Mutante", "Comerciante Sombrío", "Visionaria Píxel")
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -60,7 +51,7 @@ fun CreateGameScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding) // Aplica el padding de Scaffold
+                .padding(innerPadding)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -72,10 +63,8 @@ fun CreateGameScreen(
                 color = AccentYellow,
                 modifier = Modifier.padding(bottom = 32.dp)
             )
-            Spacer(modifier = Modifier.height(16.dp))
 
             if (!showGameCodeDisplay) {
-                // Campo de texto para el nombre del anfitrión
                 OutlinedTextField(
                     value = hostNameInput,
                     onValueChange = { hostNameInput = it },
@@ -92,8 +81,31 @@ fun CreateGameScreen(
                         cursorColor = AccentPurple
                     )
                 )
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // Mostrar un mensaje de error si existe
+                // NUEVO: Selector de Granjero
+                Text("Elige tu Granjero", color = TextLight, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    farmers.forEach { farmer ->
+                        val isSelected = selectedFarmer == farmer
+                        Button(
+                            onClick = { selectedFarmer = farmer },
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) AccentPurple else DarkCard
+                            ),
+                            border = if (isSelected) BorderStroke(2.dp, AccentYellow) else null
+                        ) {
+                            Text(farmer.split(" ")[0], fontSize = 12.sp, textAlign = TextAlign.Center) // Muestra solo la primera palabra
+                        }
+                    }
+                }
+
                 if (errorMessage != null) {
                     Text(
                         text = errorMessage!!,
@@ -103,19 +115,18 @@ fun CreateGameScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
                     onClick = {
-                        // Iniciar la corrutina para crear la partida
                         coroutineScope.launch {
                             isLoading = true
                             errorMessage = null
                             try {
-                                val (newGameId, hostPlayerId) = gameService.createGame(hostNameInput)
+                                val (newGameId, hostPlayerId) = gameService.createGame(hostNameInput, selectedFarmer!!)
                                 generatedGameCode = newGameId
                                 generatedHostPlayerId = hostPlayerId
-                                showGameCodeDisplay = true // Muestra la pantalla del código
+                                showGameCodeDisplay = true
                             } catch (e: Exception) {
                                 errorMessage = "Error al crear la partida: ${e.message}"
                             } finally {
@@ -129,7 +140,7 @@ fun CreateGameScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
                     shape = RoundedCornerShape(32.dp),
                     contentPadding = PaddingValues(16.dp),
-                    enabled = !isLoading && hostNameInput.isNotBlank() // Habilitar solo si el nombre no está vacío
+                    enabled = !isLoading && hostNameInput.isNotBlank() && selectedFarmer != null
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
@@ -142,7 +153,6 @@ fun CreateGameScreen(
                     }
                 }
             } else {
-                // Pantalla para mostrar el código de partida
                 generatedGameCode?.let { code ->
                     Card(
                         modifier = Modifier
@@ -203,7 +213,6 @@ fun CreateGameScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
                         onClick = {
-                            // Navega a la pantalla del juego con el ID de la partida y el ID del jugador anfitrión
                             generatedGameCode?.let { gameId ->
                                 generatedHostPlayerId?.let { playerId ->
                                     onGameCreated(gameId, playerId)

@@ -56,26 +56,16 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Estados para el mercado y eventos
-    var marketPrices by remember { mutableStateOf(com.pingu.tfg_glitch.data.initialMarketPrices) } // Asegúrate de que esto apunta a GameData.kt
-    var lastEvent by remember { mutableStateOf<com.pingu.tfg_glitch.data.GlitchEvent?>(null) } // Asegúrate de que esto apunta a GameData.kt
+    var marketPrices by remember { mutableStateOf(com.pingu.tfg_glitch.data.initialMarketPrices) }
+    var lastEvent by remember { mutableStateOf<com.pingu.tfg_glitch.data.GlitchEvent?>(null) }
     var supplyFailureActive by remember { mutableStateOf(false) }
     var signalInterferenceActive by remember { mutableStateOf(false) }
-
-    // Estado para controlar si una venta está en curso
     var isSelling by remember { mutableStateOf(false) }
+    var cropsSoldThisTurn by remember { mutableStateOf(0) }
 
-    // Determina si es la fase de mercado
-    val isMarketPhase = remember(game) {
-        game?.roundPhase == "MARKET_PHASE"
-    }
+    val isMarketPhase = game?.roundPhase == "MARKET_PHASE"
+    val hasPlayerFinishedMarket = game?.playersFinishedMarket?.contains(currentPlayerId) ?: false
 
-    // Determina si el jugador actual ha terminado en el mercado
-    val hasPlayerFinishedMarket = remember(game, currentPlayerId) {
-        game?.playersFinishedMarket?.contains(currentPlayerId) ?: false
-    }
-
-    // Actualiza los estados del mercado cuando el objeto 'game' cambia
     LaunchedEffect(game) {
         game?.let {
             marketPrices = it.marketPrices
@@ -85,17 +75,28 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
         }
     }
 
+    LaunchedEffect(isMarketPhase, currentPlayer?.inventario) {
+        if (isMarketPhase && currentPlayer?.inventario.isNullOrEmpty() && !hasPlayerFinishedMarket) {
+            coroutineScope.launch {
+                gameService.playerFinishedMarket(gameId, currentPlayerId)
+                snackbarHostState.showSnackbar(
+                    message = "No tienes nada que vender. Turno de mercado saltado.",
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding) // Aplica el padding de Scaffold
-                .padding(horizontal = 16.dp), // Padding horizontal para el contenido
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Título de la pantalla (siempre visible)
             Text(
                 text = "Mercado Glitch",
                 fontSize = 32.sp,
@@ -104,14 +105,12 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 modifier = Modifier.padding(top = 16.dp, bottom = 16.dp)
             )
 
-            // Contenido principal de la pantalla (desplazable)
             LazyColumn(
-                modifier = Modifier.weight(1f), // Ocupa todo el espacio disponible y permite el scroll
+                modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                contentPadding = PaddingValues(bottom = 16.dp) // Padding al final del contenido desplazable
+                contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 item {
-                    // Información del jugador actual
                     currentPlayer?.let { player ->
                         Card(
                             modifier = Modifier
@@ -138,7 +137,6 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                             }
                         }
 
-                        // Indicador de fase
                         val phaseText = when (game?.roundPhase) {
                             "PLAYER_ACTIONS" -> "Fase Actual: Acciones de Jugador"
                             "MARKET_PHASE" -> "Fase Actual: Mercado Glitch"
@@ -156,7 +154,6 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 }
 
                 item {
-                    // Tarjeta del Mercado
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -165,30 +162,29 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                         shape = RoundedCornerShape(16.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                     ) {
-                        // Usar Column y Rows en lugar de LazyVerticalGrid
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(8.dp), // Padding ligeramente reducido aquí
+                                .padding(8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             game?.let { g ->
                                 val prices = g.marketPrices
+                                val boosts = g.temporaryPriceBoosts
                                 val isInterference = g.signalInterferenceActive
                                 val cropList = listOf(
-                                    "trigo" to prices.trigo,
-                                    "maiz" to prices.maiz,
-                                    "patata" to prices.patata,
-                                    "tomateCuadrado" to prices.tomateCuadrado,
-                                    "maizArcoiris" to prices.maizArcoiris,
-                                    "brocoliCristal" to prices.brocoliCristal,
-                                    "pimientoExplosivo" to prices.pimientoExplosivo
+                                    "trigo" to (prices.trigo + (boosts["trigo"] ?: 0)),
+                                    "maiz" to (prices.maiz + (boosts["maiz"] ?: 0)),
+                                    "patata" to (prices.patata + (boosts["patata"] ?: 0)),
+                                    "tomateCuadrado" to (prices.tomateCuadrado + (boosts["tomate_cuadrado"] ?: 0)),
+                                    "maizArcoiris" to (prices.maizArcoiris + (boosts["maiz_arcoiris"] ?: 0)),
+                                    "brocoliCristal" to (prices.brocoliCristal + (boosts["brocoli_cristal"] ?: 0)),
+                                    "pimientoExplosivo" to (prices.pimientoExplosivo + (boosts["pimiento_explosivo"] ?: 0))
                                 )
-                                // Organizar manualmente en filas de 2 columnas
                                 for (i in cropList.indices step 2) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp), // Espaciado reducido
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         val price1 = if(isInterference) max(1, cropList[i].second / 2) else cropList[i].second
@@ -198,12 +194,11 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                                             val price2 = if(isInterference) max(1, cropList[i+1].second / 2) else cropList[i+1].second
                                             MarketItem(cropList[i+1].first, price2, modifier = Modifier.weight(1f))
                                         } else {
-                                            // Añadir un Spacer para ocupar el espacio si hay un número impar de ítems
                                             Spacer(modifier = Modifier.weight(1f))
                                         }
                                     }
-                                    if (i + 2 < cropList.size) { // Añadir espaciado vertical entre filas
-                                        Spacer(modifier = Modifier.height(4.dp)) // Espaciado reducido
+                                    if (i + 2 < cropList.size) {
+                                        Spacer(modifier = Modifier.height(4.dp))
                                     }
                                 }
                             }
@@ -212,7 +207,6 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 }
 
                 item {
-                    // Sección de Inventario Cosechado
                     Text(
                         text = "Tu Inventario Cosechado",
                         fontSize = 24.sp,
@@ -223,26 +217,25 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                     if (currentPlayer?.inventario.isNullOrEmpty()) {
                         Text(text = "Tu inventario está vacío.", color = TextLight, modifier = Modifier.padding(bottom = 16.dp))
                     } else {
-                        // Usar Column con verticalScroll
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 180.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(DarkCard)
-                                .verticalScroll(rememberScrollState()), // Permite el scroll interno
+                                .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            currentPlayer!!.inventario.forEach { item -> // Usar forEach para Column
+                            currentPlayer!!.inventario.forEach { item ->
                                 val marketKey = com.pingu.tfg_glitch.data.getCropMarketKey(item.nombre)
                                 val basePrice = when (marketKey) {
-                                    "trigo" -> marketPrices.trigo
-                                    "maiz" -> marketPrices.maiz
-                                    "patata" -> marketPrices.patata
-                                    "tomateCuadrado" -> marketPrices.tomateCuadrado
-                                    "maizArcoiris" -> marketPrices.maizArcoiris
-                                    "brocoliCristal" -> marketPrices.brocoliCristal
-                                    "pimientoExplosivo" -> marketPrices.pimientoExplosivo
+                                    "trigo" -> marketPrices.trigo + (game?.temporaryPriceBoosts?.get("trigo") ?: 0)
+                                    "maiz" -> marketPrices.maiz + (game?.temporaryPriceBoosts?.get("maiz") ?: 0)
+                                    "patata" -> marketPrices.patata + (game?.temporaryPriceBoosts?.get("patata") ?: 0)
+                                    "tomateCuadrado" -> marketPrices.tomateCuadrado + (game?.temporaryPriceBoosts?.get("tomate_cuadrado") ?: 0)
+                                    "maizArcoiris" -> marketPrices.maizArcoiris + (game?.temporaryPriceBoosts?.get("maiz_arcoiris") ?: 0)
+                                    "brocoliCristal" -> marketPrices.brocoliCristal + (game?.temporaryPriceBoosts?.get("brocoli_cristal") ?: 0)
+                                    "pimientoExplosivo" -> marketPrices.pimientoExplosivo + (game?.temporaryPriceBoosts?.get("pimiento_explosivo") ?: 0)
                                     else -> 0
                                 }
                                 val finalPrice = if (signalInterferenceActive) max(1, basePrice / 2) else basePrice
@@ -251,7 +244,7 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .background(DarkCard)
-                                        .padding(8.dp), // El padding se aplica aquí a cada fila
+                                        .padding(8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -265,6 +258,9 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                                                 coroutineScope.launch {
                                                     val success = gameService.sellCrop(currentPlayerId, item.id, 1, finalPrice)
                                                     if (success) {
+                                                        if (currentPlayer?.farmerType == "Comerciante Sombrío") {
+                                                            cropsSoldThisTurn++
+                                                        }
                                                         snackbarHostState.showSnackbar(
                                                             message = "Vendiste 1 ${item.nombre} por $finalPrice monedas.",
                                                             duration = SnackbarDuration.Short
@@ -302,7 +298,14 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 }
 
                 item {
-                    // Indicadores de efectos permanentes
+                    if (currentPlayer?.farmerType == "Comerciante Sombrío" && cropsSoldThisTurn > 0) {
+                        val bonus = cropsSoldThisTurn / 3
+                        Text("Bonus de venta actual: $bonus 💰", color = AccentYellow, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+
+                item {
                     if (game?.supplyFailureActive == true) {
                         Card(
                             modifier = Modifier
@@ -342,7 +345,6 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 }
 
                 item {
-                    // Tarjeta del Evento Glitch de Ronda
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -358,13 +360,12 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Evento Glitch de Ronda", // Título más específico
+                                text = "Evento Glitch de Ronda",
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = AccentRed,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
-                            // Usa el último evento del objeto Game de Firestore
                             if (game?.lastEvent != null) {
                                 Text(
                                     text = game!!.lastEvent!!.name,
@@ -393,7 +394,6 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 }
             }
 
-            // Mensaje de carga si el jugador actual no se ha cargado (fuera del LazyColumn)
             if (currentPlayer == null) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -405,11 +405,14 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 }
             }
 
-            // Botón "He Terminado en el Mercado" (ANCLADO AL FINAL)
             Button(
                 onClick = {
                     coroutineScope.launch {
-                        gameService.playerFinishedMarket(gameId, currentPlayerId) // Se pasa currentPlayerId dos veces
+                        if (currentPlayer?.farmerType == "Comerciante Sombrío") {
+                            gameService.applyMerchantBonusAndFinishMarket(gameId, currentPlayerId, cropsSoldThisTurn)
+                        } else {
+                            gameService.playerFinishedMarket(gameId, currentPlayerId)
+                        }
                         snackbarHostState.showSnackbar(
                             message = "Has terminado tus acciones en el Mercado.",
                             duration = SnackbarDuration.Short
@@ -420,7 +423,7 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(60.dp)
-                    .padding(top = 8.dp), // Pequeño padding superior para separarlo
+                    .padding(top = 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = if (isMarketPhase && !hasPlayerFinishedMarket) GlitchBlue else Color.Gray),
                 shape = RoundedCornerShape(24.dp),
                 contentPadding = PaddingValues(16.dp)

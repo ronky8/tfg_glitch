@@ -1,5 +1,6 @@
 package com.pingu.tfg_glitch.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -14,13 +15,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pingu.tfg_glitch.data.GameService
-import com.pingu.tfg_glitch.ui.theme.AccentPurple
-import com.pingu.tfg_glitch.ui.theme.AccentYellow
-import com.pingu.tfg_glitch.ui.theme.DarkCard
-import com.pingu.tfg_glitch.ui.theme.GlitchRed
-import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
-import com.pingu.tfg_glitch.ui.theme.TextLight
-import com.pingu.tfg_glitch.ui.theme.TextWhite
+import com.pingu.tfg_glitch.ui.theme.*
 import kotlinx.coroutines.launch
 
 // Instancia del servicio para la gestión de partidas.
@@ -30,17 +25,14 @@ private val gameService = GameService()
 fun JoinGameScreen(
     onGameJoined: (String, String) -> Unit // Ahora también pasa el ID del jugador
 ) {
-    // Estado para el código de partida introducido por el usuario
     var gameCodeInput by remember { mutableStateOf("") }
-    // Estado para el nombre del jugador introducido por el usuario
     var playerNameInput by remember { mutableStateOf("") }
-    // Estado para controlar la carga
+    var selectedFarmer by remember { mutableStateOf<String?>(null) } // NUEVO: Estado para el granjero
     var isLoading by remember { mutableStateOf(false) }
-    // Estado para mostrar un mensaje de error
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Scope para lanzar corrutinas
     val coroutineScope = rememberCoroutineScope()
+    val farmers = listOf("Ingeniero Glitch", "Botánica Mutante", "Comerciante Sombrío", "Visionaria Píxel")
 
     Column(
         modifier = Modifier
@@ -56,9 +48,7 @@ fun JoinGameScreen(
             color = AccentYellow,
             modifier = Modifier.padding(bottom = 32.dp)
         )
-        Spacer(modifier = Modifier.height(16.dp))
 
-        // Campo de texto para el código de partida
         OutlinedTextField(
             value = gameCodeInput,
             onValueChange = { gameCodeInput = it.uppercase() },
@@ -66,7 +56,7 @@ fun JoinGameScreen(
             modifier = Modifier.fillMaxWidth(),
             isError = errorMessage != null,
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii), // Teclado para códigos alfanuméricos
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = TextLight,
                 unfocusedTextColor = TextLight,
@@ -79,15 +69,14 @@ fun JoinGameScreen(
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Campo de texto para el nombre del jugador
         OutlinedTextField(
             value = playerNameInput,
             onValueChange = { playerNameInput = it },
             label = { Text("Tu Nombre") },
             modifier = Modifier.fillMaxWidth(),
-            isError = playerNameInput.isBlank() && !isLoading, // Validación visual para nombre vacío
+            isError = playerNameInput.isBlank() && !isLoading,
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text), // Teclado de texto normal
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = TextLight,
                 unfocusedTextColor = TextLight,
@@ -98,8 +87,32 @@ fun JoinGameScreen(
                 cursorColor = AccentPurple
             )
         )
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Mostrar un mensaje de error si existe
+        // NUEVO: Selector de Granjero
+        Text("Elige tu Granjero", color = TextLight, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            farmers.forEach { farmer ->
+                val isSelected = selectedFarmer == farmer
+                Button(
+                    onClick = { selectedFarmer = farmer },
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isSelected) AccentPurple else DarkCard
+                    ),
+                    border = if (isSelected) BorderStroke(2.dp, AccentYellow) else null
+                ) {
+                    Text(farmer.split(" ")[0], fontSize = 12.sp, textAlign = TextAlign.Center)
+                }
+            }
+        }
+
+
         if (errorMessage != null) {
             Text(
                 text = errorMessage!!,
@@ -109,18 +122,16 @@ fun JoinGameScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = {
-                // Iniciar la corrutina para unirse a la partida
                 coroutineScope.launch {
                     isLoading = true
                     errorMessage = null
                     try {
-                        // Llama a la nueva función en GameService que añade el jugador por nombre
-                        val playerId = gameService.addPlayerToGameByName(gameCodeInput, playerNameInput)
-                        onGameJoined(gameCodeInput, playerId) // Pasa gameId y playerId
+                        val playerId = gameService.addPlayerToGameByName(gameCodeInput, playerNameInput, selectedFarmer!!)
+                        onGameJoined(gameCodeInput, playerId)
                     } catch (e: Exception) {
                         errorMessage = "Error al unirse: ${e.message}"
                     } finally {
@@ -134,7 +145,7 @@ fun JoinGameScreen(
             colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
             shape = RoundedCornerShape(32.dp),
             contentPadding = PaddingValues(16.dp),
-            enabled = !isLoading && gameCodeInput.length == 6 && playerNameInput.isNotBlank() // Habilitar solo si el código y nombre son válidos
+            enabled = !isLoading && gameCodeInput.length == 6 && playerNameInput.isNotBlank() && selectedFarmer != null
         ) {
             if (isLoading) {
                 CircularProgressIndicator(

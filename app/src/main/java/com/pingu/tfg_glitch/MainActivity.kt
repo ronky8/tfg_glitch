@@ -1,5 +1,6 @@
 package com.pingu.tfg_glitch
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,6 +36,8 @@ import com.pingu.tfg_glitch.ui.theme.TextLight
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.firstOrNull
 import android.util.Log // Importar Log para depuración
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,24 +58,50 @@ class MainActivity : ComponentActivity() {
 // Instancia del servicio para la gestión de partidas.
 private val gameService = GameService()
 
-// Composable principal que maneja la navegación entre pantallas de alto nivel
+// NUEVO: Objeto para gestionar la sesión del jugador (reconexión)
+object SessionManager {
+    private const val PREFS_NAME = "GranjaGlitchPrefs"
+    private const val KEY_GAME_ID = "currentGameId"
+    private const val KEY_PLAYER_ID = "currentPlayerId"
+
+    fun saveSession(context: Context, gameId: String, playerId: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_GAME_ID, gameId).putString(KEY_PLAYER_ID, playerId).apply()
+        Log.d("SessionManager", "Session saved: gameId=$gameId, playerId=$playerId")
+    }
+
+    fun getSession(context: Context): Pair<String?, String?> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val gameId = prefs.getString(KEY_GAME_ID, null)
+        val playerId = prefs.getString(KEY_PLAYER_ID, null)
+        Log.d("SessionManager", "Session retrieved: gameId=$gameId, playerId=$playerId")
+        return Pair(gameId, playerId)
+    }
+
+    fun clearSession(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().remove(KEY_GAME_ID).remove(KEY_PLAYER_ID).apply()
+        Log.d("SessionManager", "Session cleared.")
+    }
+}
+
 @Composable
 fun AppNavigation() {
-    // Usamos 'remember' para que estos estados persistan a través de recomposiciones
-    val currentScreenState = remember { mutableStateOf("mainMenu") }
-    var currentScreen by currentScreenState
+    val context = LocalContext.current
 
-    val currentGameIdState = remember { mutableStateOf<String?>(null) }
-    var currentGameId by currentGameIdState
+    // Leer la sesión guardada solo una vez al iniciar
+    val (savedGameId, savedPlayerId) = remember { SessionManager.getSession(context) }
 
-    val currentPlayerIdState = remember { mutableStateOf<String?>(null) }
-    var currentPlayerId by currentPlayerIdState
+    // Si hay una sesión guardada, empezamos en la pantalla de juego, si no, en el menú
+    var currentScreen by rememberSaveable { mutableStateOf(if (savedGameId != null && savedPlayerId != null) "game" else "mainMenu") }
+    var currentGameId by rememberSaveable { mutableStateOf(savedGameId) }
+    var currentPlayerId by rememberSaveable { mutableStateOf(savedPlayerId) }
 
 
     when (currentScreen) {
         "mainMenu" -> MainMenuScreen(
             onStartGame = { currentScreen = "multiplayerMenu" },
-            onViewRules = { currentScreen = "rules" }, // Navegar a la pantalla de reglas
+            onViewRules = { currentScreen = "rules" },
             onOneMobileMode = {
                 currentScreen = "oneMobileMode"
             }
@@ -85,16 +114,18 @@ fun AppNavigation() {
         "createGame" -> CreateGameScreen(
             onGameCreated = { gameId, hostPlayerId ->
                 Log.d("AppNavigation", "Game created: $gameId, Host Player: $hostPlayerId")
+                SessionManager.saveSession(context, gameId, hostPlayerId) // Guardar sesión
                 currentGameId = gameId
-                currentPlayerId = hostPlayerId // El host es el jugador actual
+                currentPlayerId = hostPlayerId
                 currentScreen = "game"
             }
         )
         "joinGame" -> JoinGameScreen(
             onGameJoined = { gameId, playerId ->
                 Log.d("AppNavigation", "Joined game: $gameId, Current Player: $playerId")
+                SessionManager.saveSession(context, gameId, playerId) // Guardar sesión
                 currentGameId = gameId
-                currentPlayerId = playerId // Guarda el ID del jugador que se acaba de unir
+                currentPlayerId = playerId
                 currentScreen = "game"
             }
         )
@@ -107,53 +138,53 @@ fun AppNavigation() {
                     currentPlayerId = playerId,
                     onGameEnded = {
                         Log.d("AppNavigation", "onGameEnded called. Navigating to FinalScoreScreen.")
-                        // Cuando la partida termina, navega a la pantalla de puntuación final
                         currentScreen = "finalScore"
                     }
                 )
             } else {
-                // Si gameId o playerId son nulos, volvemos al menú principal.
                 LaunchedEffect(Unit) {
                     Log.w("AppNavigation", "gameId or playerId is null, returning to mainMenu.")
-                    currentScreenState.value = "mainMenu" // Acceder con .value
+                    SessionManager.clearSession(context) // Limpiar por si acaso
+                    currentScreen = "mainMenu"
                 }
             }
         }
         "oneMobileMode" -> {
             OneMobileScreen(
                 onBackToMainMenu = {
-                    currentGameIdState.value = null // Acceder con .value
-                    currentPlayerIdState.value = null // Acceder con .value
-                    currentScreenState.value = "mainMenu" // Acceder con .value
+                    currentGameId = null
+                    currentPlayerId = null
+                    currentScreen = "mainMenu"
                 }
             )
         }
-        "rules" -> { // Nueva ruta de navegación para las reglas
+        "rules" -> {
             RulesScreen(onBack = { currentScreen = "mainMenu" })
         }
-        "finalScore" -> { // Nueva ruta de navegación para la puntuación final
-            val gameId = currentGameId // Necesitamos el gameId para la pantalla de puntuación
+        "finalScore" -> {
+            val gameId = currentGameId
             if (gameId != null) {
                 FinalScoreScreen(
                     gameId = gameId,
                     onBackToMainMenu = {
-                        currentGameIdState.value = null // Acceder con .value
-                        currentPlayerIdState.value = null // Acceder con .value
-                        currentScreenState.value = "mainMenu" // Acceder con .value
+                        SessionManager.clearSession(context) // Limpiar sesión al volver al menú
+                        currentGameId = null
+                        currentPlayerId = null
+                        currentScreen = "mainMenu"
                     }
                 )
             } else {
-                // Si no hay gameId al llegar aquí, volvemos al menú principal.
                 LaunchedEffect(Unit) {
                     Log.w("AppNavigation", "gameId is null in finalScore, returning to mainMenu.")
-                    currentScreenState.value = "mainMenu" // Acceder con .value
+                    SessionManager.clearSession(context) // Limpiar por si acaso
+                    currentScreen = "mainMenu"
                 }
             }
         }
     }
 }
 
-// Composable que contiene las pantallas de juego (Mercado y Jugadores)
+// ... (El resto de GameScreen no necesita cambios) ...
 @Composable
 fun GameScreen(
     gameId: String,
@@ -165,41 +196,30 @@ fun GameScreen(
     var showGameEndedDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Nuevo estado para rastrear si los datos del juego se han cargado inicialmente
-    var isGameLoading by remember { mutableStateOf(true) } // Inicia en true
+    var isGameLoading by remember { mutableStateOf(true) }
 
-    // Determina si el jugador actual es el anfitrión.
-    // Se recalcula cada vez que 'game' o 'currentPlayerId' cambian.
     val isHost = remember(game, currentPlayerId) {
         val hostCheck = game?.hostPlayerId == currentPlayerId
         Log.d("GameScreen", "isHost calculated: $hostCheck (gameId: $gameId, currentPlayerId: $currentPlayerId, game?.hostPlayerId: ${game?.hostPlayerId})")
         hostCheck
     }
 
-    // Observa el estado de la partida
     LaunchedEffect(game) {
         Log.d("GameScreen", "LaunchedEffect(game) triggered. Current game: $game")
-        // Crear una copia local no nula de 'game' si no es null
-        val gameData = game // Copia local para smart cast
+        val gameData = game
         if (gameData != null) {
             if (isGameLoading) {
                 Log.d("GameScreen", "Game data loaded for the first time.")
-                isGameLoading = false // Los datos del juego se han cargado
+                isGameLoading = false
             }
-            // Si la partida existe y está marcada como terminada, navega a la pantalla de puntuación final.
-            if (gameData.hasGameEnded) { // Usar gameData para el smart cast
+            if (gameData.hasGameEnded) {
                 Log.d("GameScreen", "Game hasGameEnded detected. Calling onGameEnded to navigate to FinalScoreScreen.")
                 onGameEnded()
             }
         }
-        // Si el objeto 'game' se vuelve nulo (lo que significa que el documento de la partida
-        // fue eliminado de Firestore) Y ya habíamos cargado datos previamente (no estamos en carga inicial),
-        // entonces asumimos que la partida ha terminado y navegamos al menú principal.
-        // Este caso solo debería ocurrir si la partida es eliminada por el host desde la FinalScoreScreen
-        // o si hay un error externo. No debería causar navegación prematura a FinalScoreScreen.
-        else if (game == null && !isGameLoading) { // Eliminado !showGameEndedDialog para este flujo
+        else if (game == null && !isGameLoading) {
             Log.w("GameScreen", "Game object is null after initial load. Assuming external deletion or error. Returning to main menu.")
-            onGameEnded() // Llama al callback para que el padre maneje la navegación y reseteo
+            onGameEnded()
         }
     }
 
@@ -221,7 +241,7 @@ fun GameScreen(
                     icon = { Icon(Icons.Filled.Home, contentDescription = "Mercado") },
                     label = { Text("Mercado") }
                 )
-                NavigationBarItem( // Nueva pestaña para Objetivos
+                NavigationBarItem(
                     selected = selectedGameScreen == "objectives",
                     onClick = { selectedGameScreen = "objectives" },
                     icon = { Icon(Icons.Filled.Star, contentDescription = "Objetivos") },
@@ -237,7 +257,6 @@ fun GameScreen(
         }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
-            // Muestra un indicador de carga si los datos del juego aún no se han cargado
             if (isGameLoading) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -248,11 +267,10 @@ fun GameScreen(
                     Text(text = "Cargando partida...", color = TextLight, modifier = Modifier.padding(top = 8.dp))
                 }
             } else {
-                // Muestra las pantallas de juego una vez que los datos se han cargado
                 when (selectedGameScreen) {
                     "actions" -> PlayerActionsScreen(gameId = gameId, currentPlayerId = currentPlayerId)
                     "market" -> MarketScreen(gameId = gameId, currentPlayerId = currentPlayerId)
-                    "objectives" -> ObjectivesScreen(gameId = gameId, currentPlayerId = currentPlayerId) // Nueva pantalla de Objetivos
+                    "objectives" -> ObjectivesScreen(gameId = gameId, currentPlayerId = currentPlayerId)
                     "players" -> PlayerManagementScreen(
                         gameId = gameId,
                         currentPlayerId = currentPlayerId,
@@ -263,20 +281,15 @@ fun GameScreen(
         }
     }
 
-    // Diálogo para notificar que la partida ha terminado abruptamente
-    // Este diálogo se muestra SOLO si el host elige "Terminar Repentinamente"
-    // y no si la partida termina por puntos (que navega directamente).
     if (showGameEndedDialog) {
         AlertDialog(
             onDismissRequest = { /* No dismissable by user */ },
             title = { Text("Partida Terminada") },
-            text = { Text("La partida ha sido terminada por el anfitrión de forma repentina.") }, // Mensaje ajustado
+            text = { Text("La partida ha sido terminada por el anfitrión de forma repentina.") },
             confirmButton = {
                 Button(onClick = {
                     Log.d("GameScreen", "AlertDialog Confirm Button clicked. showGameEndedDialog = false")
                     showGameEndedDialog = false
-                    // Al aceptar el diálogo de fin abrupto, navegamos a la pantalla de puntuación final
-                    // y la limpieza se hará desde allí.
                     onGameEnded()
                 }) {
                     Text("Aceptar")

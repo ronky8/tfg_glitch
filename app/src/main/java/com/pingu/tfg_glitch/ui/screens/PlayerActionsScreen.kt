@@ -40,7 +40,6 @@ import kotlin.math.max
 private val firestoreService = FirestoreService()
 private val gameService = GameService()
 
-// [NUEVO DISEÑO] Composable para los dados pixelados (platzhalter)
 @Composable
 fun PixelDice(
     symbol: DadoSimbolo,
@@ -54,7 +53,7 @@ fun PixelDice(
         DadoSimbolo.ENERGIA -> AccentYellow to "E"
         DadoSimbolo.MONEDA -> GlitchLime to "$"
         DadoSimbolo.MISTERIO -> GlitchCyan to "?"
-        DadoSimbolo.PLANTAR -> Color.Green to "P" // Usamos verde y la letra "P"
+        DadoSimbolo.PLANTAR -> Color.Green to "P"
     }
 
     val borderColor = if (isKept) GlitchCyan else PixelText.copy(alpha = 0.5f)
@@ -89,12 +88,19 @@ fun PlayerActionsScreen(
 
     var showMysteryEncounterDialog by remember { mutableStateOf(false) }
     var showMysteryResultDialog by remember { mutableStateOf(false) }
+    var showChangeSymbolDialog by remember { mutableStateOf(false) }
+    var showMerchantBoostDialog by remember { mutableStateOf(false) }
+    var showVisionaryConfirmDialog by remember { mutableStateOf(false) }
+
+    var showTurnStartDialog by remember { mutableStateOf(false) }
 
     val playerState = remember(currentPlayer) {
         object {
             val currentDiceRoll = currentPlayer?.currentDiceRoll ?: emptyList()
             val rollPhase = currentPlayer?.rollPhase ?: 0
-            val hasRerolled = currentPlayer?.hasRerolled ?: false
+            val hasUsedStandardReroll = currentPlayer?.hasUsedStandardReroll ?: false
+            val hasUsedFreeReroll = currentPlayer?.hasUsedFreeReroll ?: false
+            val hasUsedActiveSkill = currentPlayer?.hasUsedActiveSkill ?: false
             val mysteryButtonsRemaining = currentPlayer?.mysteryButtonsRemaining ?: 0
             val activeMysteryId = currentPlayer?.activeMysteryId
             val lastMysteryResult = currentPlayer?.lastMysteryResult
@@ -107,20 +113,29 @@ fun PlayerActionsScreen(
 
     val cosechableCrops = allCrops
 
+    LaunchedEffect(isMyTurn) {
+        // Solo mostrar el diálogo si el turno acaba de cambiar a este jugador
+        if (isMyTurn && game?.roundPhase == "PLAYER_ACTIONS") {
+            // Pequeño delay para que no sea tan abrupto si la pantalla acaba de cargar
+            delay(500)
+            showTurnStartDialog = true
+        }
+    }
+
     LaunchedEffect(playerState.activeMysteryId, playerState.lastMysteryResult) {
         showMysteryEncounterDialog = playerState.activeMysteryId != null
         showMysteryResultDialog = playerState.lastMysteryResult != null
     }
 
     Scaffold(
-        containerColor = PixelBackground // [NUEVO DISEÑO]
+        containerColor = PixelBackground
     ) { innerPadding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "GRANJA GLITCH", // [NUEVO DISEÑO] Título más prominente
+                text = "GRANJA GLITCH",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = GlitchCyan,
@@ -128,32 +143,32 @@ fun PlayerActionsScreen(
             )
 
             currentPlayer?.let { player ->
-                // [NUEVO DISEÑO] Card de información del jugador
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
                     colors = CardDefaults.cardColors(containerColor = PixelCard),
-                    shape = RoundedCornerShape(0.dp), // Esquinas afiladas
+                    shape = RoundedCornerShape(0.dp),
                     border = BorderStroke(2.dp, GlitchCyan.copy(alpha = 0.7f))
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(text = player.name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = PixelText)
-                        Row {
-                            Text(text = "${player.money} 💰", fontSize = 18.sp, color = GlitchLime)
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(text = "${player.glitchEnergy} ⚡", fontSize = 18.sp, color = AccentYellow)
+                    Column(Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = player.name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = PixelText)
+                            Row {
+                                Text(text = "${player.money} 💰", fontSize = 18.sp, color = GlitchLime)
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(text = "${player.glitchEnergy} ⚡", fontSize = 18.sp, color = AccentYellow)
+                            }
                         }
+                        Text(text = "Clase: ${player.farmerType}", fontSize = 16.sp, color = GlitchCyan)
                     }
                 }
 
-                // --- [RESTAURADO] Sección de Inventario ---
+                // --- Sección de Inventario ---
                 Text(
                     text = "Inventario Cosechado",
                     fontSize = 20.sp,
@@ -173,20 +188,14 @@ fun PlayerActionsScreen(
                     ) {
                         LazyColumn {
                             items(player.inventario) { item: CultivoInventario ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(text = "${item.nombre} (x${item.cantidad})", color = PixelText)
-                                    Text(text = "VALOR: ${item.valorVentaBase}", color = PixelText.copy(alpha = 0.8f))
-                                }
+                                Text(text = "${item.nombre} (x${item.cantidad})", color = PixelText)
                             }
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // --- [RESTAURADO] Sección para Cosechar Cultivos ---
+                // --- Sección para Cosechar Cultivos ---
                 Text(
                     text = "Cosechar Cultivos",
                     fontSize = 20.sp,
@@ -219,38 +228,14 @@ fun PlayerActionsScreen(
                             shape = RoundedCornerShape(0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = PixelCard),
                             border = BorderStroke(1.dp, GlitchCyan.copy(alpha = 0.7f)),
-                            contentPadding = PaddingValues(4.dp)
+                            contentPadding = PaddingValues(8.dp)
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = crop.nombre, fontSize = 12.sp, textAlign = TextAlign.Center, color = PixelText)
-                                // NUEVO: Mostrar el precio de mercado actual
-                                game?.let { g ->
-                                    val marketKey = getCropMarketKey(crop.nombre)
-                                    val price = when (marketKey) {
-                                        "trigo" -> g.marketPrices.trigo
-                                        "maiz" -> g.marketPrices.maiz
-                                        "patata" -> g.marketPrices.patata
-                                        "tomateCuadrado" -> g.marketPrices.tomateCuadrado
-                                        "maizArcoiris" -> g.marketPrices.maizArcoiris
-                                        "brocoliCristal" -> g.marketPrices.brocoliCristal
-                                        "pimientoExplosivo" -> g.marketPrices.pimientoExplosivo
-                                        else -> 0
-                                    }
-                                    val displayPrice = if (g.signalInterferenceActive) max(1, price / 2) else price
-                                    Text(
-                                        text = "$displayPrice 💰",
-                                        fontSize = 14.sp,
-                                        color = GlitchLime,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
+                            Text(text = crop.nombre, fontSize = 12.sp, textAlign = TextAlign.Center, color = PixelText)
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // [NUEVO DISEÑO] Sección de dados con Platzhalter
                 Text(
                     text = "--- SISTEMA DE DADOS ---",
                     fontSize = 20.sp,
@@ -268,28 +253,41 @@ fun PlayerActionsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         playerState.currentDiceRoll.forEachIndexed { index, symbol ->
-                            PixelDice(
-                                symbol = symbol,
-                                isKept = keptDiceIndices.contains(index),
-                                isEnabled = playerState.rollPhase == 1 && canPerformActions,
-                                onClick = {
-                                    if (keptDiceIndices.contains(index)) keptDiceIndices.remove(index)
-                                    else keptDiceIndices.add(index)
+                            Box(contentAlignment = Alignment.TopEnd) {
+                                PixelDice(
+                                    symbol = symbol,
+                                    isKept = keptDiceIndices.contains(index),
+                                    isEnabled = playerState.rollPhase == 1 && canPerformActions,
+                                    onClick = {
+                                        if (keptDiceIndices.contains(index)) keptDiceIndices.remove(index)
+                                        else keptDiceIndices.add(index)
+                                    }
+                                )
+                                if (player.farmerType == "Ingeniero Glitch" && !playerState.hasUsedFreeReroll && playerState.rollPhase == 1 && canPerformActions) {
+                                    IconButton(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                gameService.useEngineerFreeReroll(currentPlayerId, index)
+                                            }
+                                        },
+                                        modifier = Modifier.size(20.dp).offset(x = 8.dp, y = (-8).dp)
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Reroll Gratis", tint = GlitchCyan)
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // [NUEVO DISEÑO] Botones de acción con estilo pixel
                 when (playerState.rollPhase) {
                     0 -> {
                         Button(
                             onClick = {
                                 coroutineScope.launch {
                                     showDiceRollAnimation = true
-                                    delay(250) // Animación aún más corta para mayor agilidad
+                                    delay(250)
                                     gameService.rollDice(currentPlayerId)
                                     showDiceRollAnimation = false
                                     keptDiceIndices.clear()
@@ -310,13 +308,13 @@ fun PlayerActionsScreen(
                                 onClick = {
                                     coroutineScope.launch {
                                         showDiceRollAnimation = true
-                                        delay(250) // Animación aún más corta para mayor agilidad
+                                        delay(250)
                                         gameService.rerollDice(currentPlayerId, playerState.currentDiceRoll, keptDiceIndices.toList())
                                         showDiceRollAnimation = false
                                         keptDiceIndices.clear()
                                     }
                                 },
-                                enabled = !playerState.hasRerolled && keptDiceIndices.isNotEmpty() && canPerformActions,
+                                enabled = !playerState.hasUsedStandardReroll && keptDiceIndices.isNotEmpty() && canPerformActions,
                                 modifier = Modifier.weight(1f).height(50.dp),
                                 shape = RoundedCornerShape(0.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = PixelCard),
@@ -367,6 +365,57 @@ fun PlayerActionsScreen(
                         }
                     }
                 }
+
+                // Habilidades de Granjeros
+                Spacer(modifier = Modifier.height(16.dp))
+                when (player.farmerType) {
+                    "Ingeniero Glitch" -> {
+                        Button(
+                            onClick = { showChangeSymbolDialog = true },
+                            enabled = player.glitchEnergy >= 1 && canPerformActions && !playerState.hasUsedActiveSkill && playerState.rollPhase > 0,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
+                            border = BorderStroke(2.dp, PixelCard)
+                        ) {
+                            Text("Activar Habilidad (1⚡)", color = PixelCard.copy(alpha=0.9f), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    "Visionaria Píxel" -> {
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    gameService.useVisionarySkill(currentPlayerId)
+                                    showVisionaryConfirmDialog = true
+                                }
+                            },
+                            enabled = player.glitchEnergy >= 1 && canPerformActions && !playerState.hasUsedActiveSkill,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
+                            border = BorderStroke(2.dp, PixelCard)
+                        ) {
+                            Text("Ver Futuro (1⚡)", color = PixelCard.copy(alpha=0.9f), fontWeight = FontWeight.Bold)
+                        }
+                        Text("Recordatorio: Robas 1 carta extra al resolver un Evento Glitch.", color = TextLight, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    "Botánica Mutante" -> {
+                        Text("Recordatorio: +1 crecimiento al plantar mutados. Habilidad: Paga 1🌀 para añadir +1 crecimiento temporal.", color = TextLight, textAlign = TextAlign.Center)
+                    }
+                    "Comerciante Sombrío" -> {
+                        Button(
+                            onClick = { showMerchantBoostDialog = true },
+                            enabled = player.glitchEnergy >= 1 && canPerformActions && !playerState.hasUsedActiveSkill,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
+                            border = BorderStroke(2.dp, PixelCard)
+                        ) {
+                            Text("Aumentar Precio (1🌀)", color = PixelCard.copy(alpha=0.9f), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
             } ?: Column(modifier=Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally){
                 CircularProgressIndicator(color = GlitchCyan)
                 Text("CARGANDO DATOS DEL JUGADOR...", color = PixelText, modifier = Modifier.padding(top=16.dp))
@@ -424,8 +473,126 @@ fun PlayerActionsScreen(
             modifier = Modifier.border(BorderStroke(2.dp, GlitchCyan))
         )
     }
+
+    if (showChangeSymbolDialog) {
+        ChangeSymbolDialog(
+            currentDice = currentPlayer?.currentDiceRoll ?: emptyList(),
+            onDismiss = { showChangeSymbolDialog = false },
+            onSymbolChanged = { diceIndex, newSymbol ->
+                coroutineScope.launch {
+                    gameService.changeDiceSymbol(currentPlayerId, diceIndex, newSymbol)
+                    showChangeSymbolDialog = false
+                }
+            }
+        )
+    }
+
+    if (showTurnStartDialog) {
+        AlertDialog(
+            onDismissRequest = { showTurnStartDialog = false },
+            title = { Text("¡Es tu turno!") },
+            text = { Text("Recuerda robar 1 carta del mazo y poner 1 marcador de crecimiento sobre cada uno de tus cultivos plantados.") },
+            confirmButton = {
+                Button(onClick = { showTurnStartDialog = false }) {
+                    Text("Entendido")
+                }
+            }
+        )
+    }
+
+    if (showVisionaryConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showVisionaryConfirmDialog = false },
+            title = { Text("Habilidad Activada") },
+            text = { Text("Has usado 'Visión de Futuro'. Mira las 3 cartas superiores del mazo físico y sigue las reglas de la habilidad.") },
+            confirmButton = {
+                Button(onClick = { showVisionaryConfirmDialog = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    if (showMerchantBoostDialog) {
+        val mutatedCrops = allCrops.filter { it.tipo == TipoCultivo.MUTADO }
+        AlertDialog(
+            onDismissRequest = { showMerchantBoostDialog = false },
+            title = { Text("Aumentar Precio de Venta") },
+            text = {
+                Column {
+                    Text("Elige un cultivo mutado para aumentar su precio en +2 esta ronda:")
+                    mutatedCrops.forEach { crop ->
+                        Button(onClick = {
+                            coroutineScope.launch {
+                                gameService.applyMerchantPriceBoost(gameId, currentPlayerId, crop.id)
+                                showMerchantBoostDialog = false
+                            }
+                        }) {
+                            Text(crop.nombre)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMerchantBoostDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
+@Composable
+fun ChangeSymbolDialog(
+    currentDice: List<DadoSimbolo>,
+    onDismiss: () -> Unit,
+    onSymbolChanged: (Int, DadoSimbolo) -> Unit
+) {
+    var selectedDiceIndex by remember { mutableStateOf<Int?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cambiar Símbolo de Dado", color = GlitchCyan) },
+        text = {
+            Column {
+                if (selectedDiceIndex == null) {
+                    Text("1. Selecciona el dado que quieres cambiar:", color = PixelText)
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        currentDice.forEachIndexed { index, symbol ->
+                            PixelDice(symbol = symbol, isKept = false, onClick = { selectedDiceIndex = index }, isEnabled = true)
+                        }
+                    }
+                } else {
+                    Text("2. Selecciona el nuevo símbolo:", color = PixelText)
+                    Spacer(Modifier.height(8.dp))
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(DadoSimbolo.values()) { symbol ->
+                            Button(onClick = { onSymbolChanged(selectedDiceIndex!!, symbol) }) {
+                                Text(symbol.name.take(3))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar", color = GlitchRed)
+            }
+        },
+        containerColor = PixelCard,
+        shape = RoundedCornerShape(0.dp),
+        modifier = Modifier.border(BorderStroke(2.dp, GlitchCyan))
+    )
+}
 
 @Composable
 fun MysteryEncounterDialog(

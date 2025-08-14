@@ -35,31 +35,32 @@ class GameService {
     /**
      * Creates a new game in Firestore and returns the game code and the host's player ID.
      */
-    suspend fun createGame(hostName: String): Pair<String, String> {
+    suspend fun createGame(hostName: String, farmerType: String): Pair<String, String> {
         val gameId = generateGameCode()
         val selectedObjectives = allObjectives.shuffled(Random).take(3).toMutableList()
-        val newGame = Game(id = gameId, activeObjectives = selectedObjectives)
-        gamesCollection.document(newGame.id).set(newGame).await()
 
         val hostDocRef = playersCollection.document()
         val hostPlayerId = hostDocRef.id
+
+        val newGame = Game(
+            id = gameId,
+            activeObjectives = selectedObjectives,
+            hostPlayerId = hostPlayerId,
+            roundStartPlayerId = hostPlayerId // El host empieza la primera ronda
+        )
+        gamesCollection.document(newGame.id).set(newGame).await()
+
         val hostPlayer = Player(
             id = hostPlayerId,
             gameId = newGame.id,
             name = hostName,
+            farmerType = farmerType,
             money = 10,
             glitchEnergy = 0,
-            mano = mutableListOf(),
-            parcela = mutableListOf(),
-            inventario = mutableListOf(),
-            currentDiceRoll = emptyList(),
-            rollPhase = 0,
-            hasRerolled = false,
-            mysteryButtonsRemaining = 0,
-            objectivesClaimed = mutableListOf(),
-            manualBonusPV = 0,
-            activeMysteryId = null,
-            lastMysteryResult = null
+            hasUsedStandardReroll = false,
+            hasUsedFreeReroll = false,
+            hasUsedActiveSkill = false,
+            // ... el resto de campos se inicializan por defecto
         )
         hostDocRef.set(hostPlayer).await()
 
@@ -68,7 +69,6 @@ class GameService {
             val game = transaction.get(gameRef).toObject<Game>()
             if (game != null) {
                 game.playerIds.add(hostPlayerId)
-                game.hostPlayerId = hostPlayerId
                 game.currentPlayerTurnId = hostPlayerId
                 game.roundPhase = "PLAYER_ACTIONS"
                 transaction.set(gameRef, game)
@@ -95,17 +95,7 @@ class GameService {
             name = "Jugador Un Móvil",
             money = 10,
             glitchEnergy = 0,
-            mano = mutableListOf(),
-            parcela = mutableListOf(),
-            inventario = mutableListOf(),
-            currentDiceRoll = emptyList(),
-            rollPhase = 0,
-            hasRerolled = false,
-            mysteryButtonsRemaining = 0,
-            objectivesClaimed = mutableListOf(),
-            manualBonusPV = 0,
-            activeMysteryId = null,
-            lastMysteryResult = null
+            // ... el resto de campos se inicializan por defecto
         )
         playerDocRef.set(oneMobilePlayer).await()
 
@@ -116,6 +106,7 @@ class GameService {
                 game.playerIds.add(playerId)
                 game.hostPlayerId = playerId
                 game.currentPlayerTurnId = playerId
+                game.roundStartPlayerId = playerId
                 game.roundPhase = "PLAYER_ACTIONS"
                 transaction.set(gameRef, game)
             }
@@ -159,7 +150,7 @@ class GameService {
     /**
      * Adds a new player to the game by name and returns the newly generated player ID.
      */
-    suspend fun addPlayerToGameByName(gameId: String, playerName: String): String {
+    suspend fun addPlayerToGameByName(gameId: String, playerName: String, farmerType: String): String {
         val gameDoc = gamesCollection.document(gameId).get().await()
         if (!gameDoc.exists()) {
             throw Exception("Game with ID $gameId does not exist.")
@@ -171,19 +162,10 @@ class GameService {
             id = newPlayerId,
             gameId = gameId,
             name = playerName,
+            farmerType = farmerType,
             money = 10,
             glitchEnergy = 0,
-            mano = mutableListOf(),
-            parcela = mutableListOf(),
-            inventario = mutableListOf(),
-            currentDiceRoll = emptyList(),
-            rollPhase = 0,
-            hasRerolled = false,
-            mysteryButtonsRemaining = 0,
-            objectivesClaimed = mutableListOf(),
-            manualBonusPV = 0,
-            activeMysteryId = null,
-            lastMysteryResult = null
+            // ... el resto de campos se inicializan por defecto
         )
 
         newPlayerDocRef.set(newPlayer).await()
@@ -332,7 +314,7 @@ class GameService {
         playerId: String,
         diceRoll: List<DadoSimbolo>,
         rollPhase: Int,
-        hasRerolled: Boolean,
+        hasUsedStandardReroll: Boolean,
         mysteryButtonsRemaining: Int
     ) {
         val playerRef = playersCollection.document(playerId)
@@ -340,7 +322,7 @@ class GameService {
             mapOf(
                 "currentDiceRoll" to diceRoll.map { it.name },
                 "rollPhase" to rollPhase,
-                "hasRerolled" to hasRerolled,
+                "hasUsedStandardReroll" to hasUsedStandardReroll,
                 "mysteryButtonsRemaining" to mysteryButtonsRemaining
             )
         ).await()
@@ -393,6 +375,84 @@ class GameService {
             if (keptDiceIndices.contains(index)) symbol else DadoSimbolo.values().random()
         }
         updatePlayerDiceState(playerId, newRoll, 1, true, 0)
+    }
+
+    suspend fun useEngineerFreeReroll(playerId: String, diceIndex: Int) {
+        val playerRef = playersCollection.document(playerId)
+        db.runTransaction { transaction ->
+            val player = transaction.get(playerRef).toObject<Player>() ?: return@runTransaction
+            if (player.farmerType == "Ingeniero Glitch" && !player.hasUsedFreeReroll && player.currentDiceRoll.isNotEmpty()) {
+                val newRoll = player.currentDiceRoll.toMutableList()
+                newRoll[diceIndex] = DadoSimbolo.values().random()
+                player.currentDiceRoll = newRoll
+                player.hasUsedFreeReroll = true
+                transaction.set(playerRef, player)
+            }
+        }.await()
+    }
+
+    suspend fun changeDiceSymbol(playerId: String, diceIndex: Int, newSymbol: DadoSimbolo) {
+        val playerRef = playersCollection.document(playerId)
+        db.runTransaction { transaction ->
+            val player = transaction.get(playerRef).toObject<Player>() ?: return@runTransaction
+            if (player.farmerType == "Ingeniero Glitch" && player.glitchEnergy >= 1 && player.currentDiceRoll.isNotEmpty() && !player.hasUsedActiveSkill) {
+                val newRoll = player.currentDiceRoll.toMutableList()
+                newRoll[diceIndex] = newSymbol
+                player.currentDiceRoll = newRoll
+                player.glitchEnergy -= 1
+                player.hasUsedActiveSkill = true
+                transaction.set(playerRef, player)
+            }
+        }.await()
+    }
+
+    suspend fun useVisionarySkill(playerId: String) {
+        val playerRef = playersCollection.document(playerId)
+        db.runTransaction { transaction ->
+            val player = transaction.get(playerRef).toObject<Player>() ?: return@runTransaction
+            if (player.farmerType == "Visionaria Píxel" && player.glitchEnergy >= 1 && !player.hasUsedActiveSkill) {
+                player.glitchEnergy -= 1
+                player.hasUsedActiveSkill = true
+                transaction.set(playerRef, player)
+            }
+        }.await()
+    }
+
+    suspend fun applyMerchantPriceBoost(gameId: String, playerId: String, cropId: String) {
+        val playerRef = playersCollection.document(playerId)
+        val gameRef = gamesCollection.document(gameId)
+        db.runTransaction { transaction ->
+            val player = transaction.get(playerRef).toObject<Player>() ?: return@runTransaction
+            val game = transaction.get(gameRef).toObject<Game>() ?: return@runTransaction
+
+            if (player.farmerType == "Comerciante Sombrío" && player.glitchEnergy >= 1 && !player.hasUsedActiveSkill) {
+                player.glitchEnergy -= 1
+                player.hasUsedActiveSkill = true
+                game.temporaryPriceBoosts[cropId] = (game.temporaryPriceBoosts[cropId] ?: 0) + 2
+                transaction.set(playerRef, player)
+                transaction.set(gameRef, game)
+            }
+        }.await()
+    }
+
+    suspend fun applyMerchantBonusAndFinishMarket(gameId: String, playerId: String, cropsSoldCount: Int) {
+        val playerRef = playersCollection.document(playerId)
+        val gameRef = gamesCollection.document(gameId)
+        db.runTransaction { transaction ->
+            val player = transaction.get(playerRef).toObject<Player>() ?: return@runTransaction
+            val game = transaction.get(gameRef).toObject<Game>() ?: return@runTransaction
+
+            if (player.farmerType == "Comerciante Sombrío") {
+                val bonus = cropsSoldCount / 3
+                player.money += bonus
+            }
+
+            if (!game.playersFinishedMarket.contains(playerId)) {
+                game.playersFinishedMarket.add(playerId)
+            }
+            transaction.set(playerRef, player)
+            transaction.set(gameRef, game)
+        }.await()
     }
 
     /**
@@ -657,23 +717,7 @@ class GameService {
                     game.roundPhase = "MARKET_PHASE"
                     game.playersFinishedTurn.clear()
                     game.currentPlayerTurnId = null
-
-                    val playersToResetDice = mutableListOf<Player>()
-                    playerIds.forEach { pId ->
-                        val pToResetRef = playersCollection.document(pId)
-                        val pToReset = transaction.get(pToResetRef).toObject<Player>()
-                        if (pToReset != null) playersToResetDice.add(pToReset)
-                    }
-
-                    playersToResetDice.forEach { p ->
-                        p.currentDiceRoll = emptyList()
-                        p.rollPhase = 0
-                        p.hasRerolled = false
-                        p.mysteryButtonsRemaining = 0
-                        p.activeMysteryId = null // [CORRECCIÓN]
-                        p.lastMysteryResult = null // [CORRECCIÓN]
-                        transaction.set(playersCollection.document(p.id), p)
-                    }
+                    // La limpieza de estado de los jugadores se hace en advanceRound
                     transaction.set(gameRef, game)
                     "market_phase"
                 } else {
@@ -683,12 +727,15 @@ class GameService {
                     val nextPlayerId = playerIds[nextIndex]
                     game.currentPlayerTurnId = nextPlayerId
 
+                    // Limpiar estado del jugador que termina
                     currentPlayer.currentDiceRoll = emptyList()
                     currentPlayer.rollPhase = 0
-                    currentPlayer.hasRerolled = false
+                    currentPlayer.hasUsedStandardReroll = false
+                    currentPlayer.hasUsedFreeReroll = false
+                    currentPlayer.hasUsedActiveSkill = false
                     currentPlayer.mysteryButtonsRemaining = 0
-                    currentPlayer.activeMysteryId = null // [CORRECCIÓN]
-                    currentPlayer.lastMysteryResult = null // [CORRECCIÓN]
+                    currentPlayer.activeMysteryId = null
+                    currentPlayer.lastMysteryResult = null
 
                     transaction.set(gameRef, game)
                     transaction.set(playerRef, currentPlayer)
@@ -700,6 +747,60 @@ class GameService {
             null
         }
     }
+
+    /**
+     * Permite al host forzar el paso de turno de un jugador atascado.
+     */
+    suspend fun forceAdvanceTurn(gameId: String): String? {
+        val gameRef = gamesCollection.document(gameId)
+        return try {
+            db.runTransaction { transaction ->
+                val game = transaction.get(gameRef).toObject<Game>()
+                if (game == null) return@runTransaction null
+
+                val stuckPlayerId = game.currentPlayerTurnId ?: return@runTransaction null
+                val stuckPlayerRef = playersCollection.document(stuckPlayerId)
+                val stuckPlayer = transaction.get(stuckPlayerRef).toObject<Player>()
+
+                if (!game.playersFinishedTurn.contains(stuckPlayerId)) {
+                    game.playersFinishedTurn.add(stuckPlayerId)
+                }
+
+                val playerIds = game.playerIds.sorted()
+                val allPlayersFinishedActions = game.playersFinishedTurn.size == playerIds.size
+
+                if (allPlayersFinishedActions) {
+                    game.roundPhase = "MARKET_PHASE"
+                    game.playersFinishedTurn.clear()
+                    game.currentPlayerTurnId = null
+                } else {
+                    val currentIndex = playerIds.indexOf(stuckPlayerId)
+                    if (currentIndex == -1) return@runTransaction null
+                    val nextIndex = (currentIndex + 1) % playerIds.size
+                    game.currentPlayerTurnId = playerIds[nextIndex]
+                }
+
+                if (stuckPlayer != null) {
+                    stuckPlayer.currentDiceRoll = emptyList()
+                    stuckPlayer.rollPhase = 0
+                    stuckPlayer.hasUsedStandardReroll = false
+                    stuckPlayer.hasUsedFreeReroll = false
+                    stuckPlayer.hasUsedActiveSkill = false
+                    stuckPlayer.mysteryButtonsRemaining = 0
+                    stuckPlayer.activeMysteryId = null
+                    stuckPlayer.lastMysteryResult = null
+                    transaction.set(stuckPlayerRef, stuckPlayer)
+                }
+
+                transaction.set(gameRef, game)
+                game.roundPhase
+            }.await()
+        } catch (e: Exception) {
+            Log.e("GameService", "Error forcing turn advance in game $gameId: ${e.message}", e)
+            null
+        }
+    }
+
 
     /**
      * Marks that a player has finished their actions in the market phase.
@@ -740,8 +841,7 @@ class GameService {
         return try {
             db.runTransaction { transaction ->
                 val game = transaction.get(gameRef).toObject<Game>()
-                if (game == null) return@runTransaction false
-                if (game.playersFinishedMarket.size != game.playerIds.size) return@runTransaction false
+                if (game == null || game.playersFinishedMarket.size != game.playerIds.size) return@runTransaction false
 
                 val basePrices = allCrops.associate { it.id to it.valorVentaBase }
                 val currentPrices = game.marketPrices
@@ -755,55 +855,42 @@ class GameService {
                     pimientoExplosivo = calculateNewPrice(currentPrices.pimientoExplosivo, basePrices["pimiento_explosivo"] ?: 8)
                 )
 
-                var newSignalInterferenceActive = false // Se resetea en cada ronda
-
                 var newEvent: GlitchEvent? = null
                 if (Random.nextDouble() < 0.60) {
-                    val possibleEvents = if (game.supplyFailureActive) {
-                        eventosGlitch.filter { it.name != "Fallo de Suministro" }
-                    } else {
-                        eventosGlitch
-                    }
-                    if (possibleEvents.isNotEmpty()) {
-                        newEvent = possibleEvents.random()
-                    }
+                    val possibleEvents = if (game.supplyFailureActive) eventosGlitch.filter { it.name != "Fallo de Suministro" } else eventosGlitch
+                    if (possibleEvents.isNotEmpty()) newEvent = possibleEvents.random()
                 }
 
-                var newSupplyFailureActive = game.supplyFailureActive
-                when (newEvent?.name) {
-                    "Fallo de Suministro" -> newSupplyFailureActive = true
-                    "Interferencia de Señal" -> newSignalInterferenceActive = true
-                }
-
-                // CORRECCIÓN: Guardar los precios normales, no los modificados por el evento.
-                // El efecto de "Interferencia de Señal" se aplicará en la UI.
                 game.marketPrices = newMarketPrices
                 game.lastEvent = newEvent
-                game.supplyFailureActive = newSupplyFailureActive
-                game.signalInterferenceActive = newSignalInterferenceActive
-                game.roundPhase = "PLAYER_ACTIONS"
-                game.playersFinishedMarket.clear()
+                game.supplyFailureActive = newEvent?.name == "Fallo de Suministro" || game.supplyFailureActive
+                game.signalInterferenceActive = newEvent?.name == "Interferencia de Señal"
 
                 val playerIds = game.playerIds.sorted()
-                val currentHostIndex = playerIds.indexOf(game.hostPlayerId)
-                val nextInitialPlayerIndex = (currentHostIndex + 1) % playerIds.size
-                game.currentPlayerTurnId = playerIds[nextInitialPlayerIndex]
+                val currentStartIndex = playerIds.indexOf(game.roundStartPlayerId ?: game.hostPlayerId)
+                val nextStartIndex = (currentStartIndex + 1) % playerIds.size
+                val newRoundStartPlayerId = playerIds[nextStartIndex]
 
-                val playersToResetDice = mutableListOf<Player>()
+                game.roundStartPlayerId = newRoundStartPlayerId
+                game.currentPlayerTurnId = newRoundStartPlayerId
+                game.roundPhase = "PLAYER_ACTIONS"
+                game.playersFinishedMarket.clear()
+                game.temporaryPriceBoosts.clear()
+
                 playerIds.forEach { pId ->
                     val pRef = playersCollection.document(pId)
                     val p = transaction.get(pRef).toObject<Player>()
-                    if (p != null) playersToResetDice.add(p)
-                }
-
-                playersToResetDice.forEach { p ->
-                    p.currentDiceRoll = emptyList()
-                    p.rollPhase = 0
-                    p.hasRerolled = false
-                    p.mysteryButtonsRemaining = 0
-                    p.activeMysteryId = null
-                    p.lastMysteryResult = null
-                    transaction.set(playersCollection.document(p.id), p)
+                    if (p != null) {
+                        p.currentDiceRoll = emptyList()
+                        p.rollPhase = 0
+                        p.hasUsedStandardReroll = false
+                        p.hasUsedFreeReroll = false
+                        p.hasUsedActiveSkill = false
+                        p.mysteryButtonsRemaining = 0
+                        p.activeMysteryId = null
+                        p.lastMysteryResult = null
+                        transaction.set(pRef, p)
+                    }
                 }
 
                 transaction.set(gameRef, game)
@@ -836,35 +923,18 @@ class GameService {
                     pimientoExplosivo = calculateNewPrice(currentPrices.pimientoExplosivo, basePrices["pimiento_explosivo"] ?: 8)
                 )
 
-                var newSignalInterferenceActive = false
-                if (game.signalInterferenceActive) {
-                    newSignalInterferenceActive = false
-                }
-
                 var newEvent: GlitchEvent? = null
                 if (Random.nextDouble() < 0.60) {
-                    val possibleEvents = if (game.supplyFailureActive) {
-                        eventosGlitch.filter { it.name != "Fallo de Suministro" }
-                    } else {
-                        eventosGlitch
-                    }
-                    if (possibleEvents.isNotEmpty()) {
-                        newEvent = possibleEvents.random()
-                    }
+                    val possibleEvents = if (game.supplyFailureActive) eventosGlitch.filter { it.name != "Fallo de Suministro" } else eventosGlitch
+                    if (possibleEvents.isNotEmpty()) newEvent = possibleEvents.random()
                 }
 
-                var newSupplyFailureActive = game.supplyFailureActive
-                when (newEvent?.name) {
-                    "Fallo de Suministro" -> newSupplyFailureActive = true
-                    "Interferencia de Señal" -> newSignalInterferenceActive = true
-                }
-
-                // CORRECCIÓN: Guardar los precios normales, no los modificados por el evento.
                 game.marketPrices = newMarketPrices
                 game.lastEvent = newEvent
-                game.supplyFailureActive = newSupplyFailureActive
-                game.signalInterferenceActive = newSignalInterferenceActive
+                game.supplyFailureActive = newEvent?.name == "Fallo de Suministro" || game.supplyFailureActive
+                game.signalInterferenceActive = newEvent?.name == "Interferencia de Señal"
                 game.roundPhase = "PLAYER_ACTIONS"
+                game.temporaryPriceBoosts.clear()
 
                 transaction.set(gameRef, game)
                 true

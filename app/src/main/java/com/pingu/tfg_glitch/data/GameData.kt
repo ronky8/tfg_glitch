@@ -6,7 +6,6 @@ import android.util.Log // Solo para depuración en getCropMarketKey si es neces
 
 // --- Enums y Clases de Datos del Juego ---
 
-// [CORREGIDO] Añadido el símbolo PLANTAR
 enum class DadoSimbolo { GLITCH, CRECIMIENTO, ENERGIA, MONEDA, MISTERIO, PLANTAR }
 enum class TipoCultivo { NORMAL, MUTADO }
 
@@ -82,24 +81,20 @@ data class CultivoInventario(
     val pvFinalJuego: Int = 0
 )
 
-// --- [NUEVO] Estructuras para la Mecánica de Misterio ---
+// --- Estructuras para la Mecánica de Misterio ---
 
-// Representa el resultado de una elección o suceso
 data class MysteryOutcome(
     val description: String = "",
     val moneyChange: Int = 0,
     val energyChange: Int = 0,
-    // Aquí se podrían añadir más efectos: robar cartas, añadir crecimiento, etc.
 )
 
-// Representa una opción que el jugador puede elegir
 data class MysteryChoice(
     val id: String = UUID.randomUUID().toString(),
     val text: String = "",
     val outcome: MysteryOutcome = MysteryOutcome()
 )
 
-// Clase base para todos los tipos de encuentros misteriosos
 sealed class MysteryEncounter {
     abstract val id: String
     abstract val type: String
@@ -107,7 +102,6 @@ sealed class MysteryEncounter {
     abstract val description: String
 }
 
-// Encuentro donde el jugador toma una decisión
 data class DecisionEncounter(
     override val id: String = UUID.randomUUID().toString(),
     override val title: String = "",
@@ -117,22 +111,20 @@ data class DecisionEncounter(
     override val type: String = "decision"
 }
 
-// Encuentro cuyo resultado es aleatorio
 data class RandomEventEncounter(
     override val id: String = UUID.randomUUID().toString(),
     override val title: String = "",
     override val description: String = "",
-    val outcomes: List<Pair<MysteryOutcome, Int>> = emptyList() // Lista de (Resultado, Peso de Probabilidad)
+    val outcomes: List<Pair<MysteryOutcome, Int>> = emptyList()
 ) : MysteryEncounter() {
     override val type: String = "random"
 }
 
-// Encuentro que activa un minijuego (estructura preparada para el futuro)
 data class MinigameEncounter(
     override val id: String = UUID.randomUUID().toString(),
     override val title: String = "",
     override val description: String = "",
-    val minigameType: String = "", // ej: "reaction_time", "memory"
+    val minigameType: String = "",
     val successOutcome: MysteryOutcome = MysteryOutcome(),
     val failureOutcome: MysteryOutcome = MysteryOutcome()
 ) : MysteryEncounter() {
@@ -146,6 +138,7 @@ data class Player(
     val id: String = "",
     val gameId: String = "",
     var name: String = "Nuevo Jugador",
+    var farmerType: String = "Ingeniero Glitch",
     var money: Int = 10,
     var glitchEnergy: Int = 0,
     val mano: MutableList<CartaSemilla> = mutableListOf(),
@@ -153,7 +146,9 @@ data class Player(
     val inventario: MutableList<CultivoInventario> = mutableListOf(),
     var currentDiceRoll: List<DadoSimbolo> = emptyList(),
     var rollPhase: Int = 0,
-    var hasRerolled: Boolean = false,
+    var hasUsedStandardReroll: Boolean = false,
+    var hasUsedFreeReroll: Boolean = false,
+    var hasUsedActiveSkill: Boolean = false,
     var mysteryButtonsRemaining: Int = 0,
     val objectivesClaimed: MutableList<String> = mutableListOf(),
     var totalScore: Int = 0,
@@ -218,9 +213,7 @@ val eventosGlitch = listOf(
     GlitchEvent(name = "Datos Corruptos", description = "¡Oh no! Todos los jugadores deben mostrar su mano. El jugador con más cartas debe descartar una al azar.")
 )
 
-// --- [ACTUALIZADO] Lista de Encuentros Misteriosos ampliada ---
 val allMysteryEncounters = listOf<MysteryEncounter>(
-    // --- Encuentros de Decisión ---
     DecisionEncounter(
         id = "decision_dron",
         title = "Dron de Contrabando",
@@ -258,8 +251,6 @@ val allMysteryEncounters = listOf<MysteryEncounter>(
             MysteryChoice("choice_vender", "Vender el fragmento", MysteryOutcome("Un contacto anónimo te paga bien por la tarjeta. Ganas 3 monedas.", moneyChange = 3))
         )
     ),
-
-    // --- Encuentros de Suceso Aleatorio ---
     RandomEventEncounter(
         id = "random_lluvia_datos",
         title = "Lluvia de Datos",
@@ -297,8 +288,6 @@ val allMysteryEncounters = listOf<MysteryEncounter>(
             Pair(MysteryOutcome("Era un simple cortocircuito. Pierdes 1 moneda para repararlo.", moneyChange = -1), 50)
         )
     ),
-
-    // --- Encuentros de Minijuego ---
     MinigameEncounter(
         id = "minigame_firewall",
         title = "¡Brecha en el Cortafuegos!",
@@ -308,7 +297,6 @@ val allMysteryEncounters = listOf<MysteryEncounter>(
         failureOutcome = MysteryOutcome("La brecha ha sido parcial. El intruso ha robado algunos datos de mercado. Pierdes 2 monedas.", moneyChange = -2)
     )
 )
-
 
 val allCrops = listOf(
     CultivoNormal(id = "trigo", nombre = "Trigo", costePlantado = 2, crecimientoRequerido = 3, valorVentaBase = 3, pvFinalJuego = 2),
