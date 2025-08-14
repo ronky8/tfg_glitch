@@ -75,7 +75,9 @@ fun PixelDice(
 @Composable
 fun PlayerActionsScreen(
     gameId: String,
-    currentPlayerId: String
+    currentPlayerId: String,
+    hasShownTurnPopup: Boolean,
+    onTurnPopupShown: () -> Unit
 ) {
     val currentPlayer by firestoreService.getPlayer(currentPlayerId).collectAsState(initial = null)
     val game by gameService.getGame(gameId).collectAsState(initial = null)
@@ -113,12 +115,11 @@ fun PlayerActionsScreen(
 
     val cosechableCrops = allCrops
 
-    LaunchedEffect(isMyTurn) {
-        // Solo mostrar el diálogo si el turno acaba de cambiar a este jugador
-        if (isMyTurn && game?.roundPhase == "PLAYER_ACTIONS") {
-            // Pequeño delay para que no sea tan abrupto si la pantalla acaba de cargar
+    LaunchedEffect(isMyTurn, hasShownTurnPopup) {
+        if (isMyTurn && !hasShownTurnPopup) {
             delay(500)
             showTurnStartDialog = true
+            onTurnPopupShown()
         }
     }
 
@@ -168,7 +169,6 @@ fun PlayerActionsScreen(
                     }
                 }
 
-                // --- Sección de Inventario ---
                 Text(
                     text = "Inventario Cosechado",
                     fontSize = 20.sp,
@@ -195,7 +195,6 @@ fun PlayerActionsScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // --- Sección para Cosechar Cultivos ---
                 Text(
                     text = "Cosechar Cultivos",
                     fontSize = 20.sp,
@@ -366,7 +365,6 @@ fun PlayerActionsScreen(
                     }
                 }
 
-                // Habilidades de Granjeros
                 Spacer(modifier = Modifier.height(16.dp))
                 when (player.farmerType) {
                     "Ingeniero Glitch" -> {
@@ -397,15 +395,15 @@ fun PlayerActionsScreen(
                         ) {
                             Text("Ver Futuro (1⚡)", color = PixelCard.copy(alpha=0.9f), fontWeight = FontWeight.Bold)
                         }
-                        Text("Recordatorio: Robas 1 carta extra al resolver un Evento Glitch.", color = TextLight, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                        Text("Recordatorio: Robas 1 carta extra al resolver una Carta de Catástrofe.", color = TextLight, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
                     }
                     "Botánica Mutante" -> {
-                        Text("Recordatorio: +1 crecimiento al plantar mutados. Habilidad: Paga 1🌀 para añadir +1 crecimiento temporal.", color = TextLight, textAlign = TextAlign.Center)
+                        Text("Recordatorio: +1 crecimiento al plantar mutados. Habilidad: Paga 1🌀 para añadir +1 crecimiento temporal a un cultivo.", color = TextLight, textAlign = TextAlign.Center)
                     }
                     "Comerciante Sombrío" -> {
                         Button(
                             onClick = { showMerchantBoostDialog = true },
-                            enabled = player.glitchEnergy >= 1 && canPerformActions && !playerState.hasUsedActiveSkill,
+                            enabled = canPerformActions && !playerState.hasUsedActiveSkill,
                             modifier = Modifier.fillMaxWidth().height(50.dp),
                             shape = RoundedCornerShape(0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
@@ -716,6 +714,6 @@ fun ReactionTimeMinigame(onResult: (Boolean) -> Unit) {
 @Composable
 fun PlayerActionsScreenPreview() {
     GranjaGlitchAppTheme {
-        PlayerActionsScreen(gameId = "ABCDEF", currentPlayerId = "sample-player-id")
+        PlayerActionsScreen(gameId = "ABCDEF", currentPlayerId = "sample-player-id", hasShownTurnPopup = false, onTurnPopupShown = {})
     }
 }

@@ -18,11 +18,11 @@ data class Game(
     var supplyFailureActive: Boolean = false,
     var signalInterferenceActive: Boolean = false,
     var currentPlayerTurnId: String? = null,
-    var roundStartPlayerId: String? = null, // NUEVO: Para corregir el orden de turno
+    var roundStartPlayerId: String? = null, // Para corregir el orden de turno
     var roundPhase: String = "PLAYER_ACTIONS",
     val playersFinishedTurn: MutableList<String> = mutableListOf(),
     val playersFinishedMarket: MutableList<String> = mutableListOf(),
     val activeObjectives: MutableList<Objective> = mutableListOf(),
     val claimedObjectivesByPlayer: MutableMap<String, MutableList<String>> = mutableMapOf(),
-    val temporaryPriceBoosts: MutableMap<String, Int> = mutableMapOf() // NUEVO: Para habilidad del Comerciante
+    val temporaryPriceBoosts: MutableMap<String, Int> = mutableMapOf() // Para habilidad del Comerciante (Global)
 )

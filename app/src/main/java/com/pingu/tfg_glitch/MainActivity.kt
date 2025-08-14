@@ -9,25 +9,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Casino // Nuevo icono para acciones/dados
-import androidx.compose.material.icons.filled.Star // Nuevo icono para objetivos
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+import com.pingu.tfg_glitch.data.FirestoreService
 import com.pingu.tfg_glitch.data.GameService
 import com.pingu.tfg_glitch.ui.screens.MarketScreen
 import com.pingu.tfg_glitch.ui.screens.PlayerManagementScreen
-import com.pingu.tfg_glitch.ui.screens.PlayerActionsScreen // Importar la nueva pantalla
+import com.pingu.tfg_glitch.ui.screens.PlayerActionsScreen
 import com.pingu.tfg_glitch.ui.screens.MainMenuScreen
 import com.pingu.tfg_glitch.ui.screens.MultiplayerMenuScreen
 import com.pingu.tfg_glitch.ui.screens.CreateGameScreen
 import com.pingu.tfg_glitch.ui.screens.JoinGameScreen
-import com.pingu.tfg_glitch.ui.screens.OneMobileScreen // Importar la nueva pantalla OneMobileScreen
-import com.pingu.tfg_glitch.ui.screens.RulesScreen // Importar la nueva pantalla RulesScreen
-import com.pingu.tfg_glitch.ui.screens.FinalScoreScreen // Importar la nueva pantalla FinalScoreScreen
-import com.pingu.tfg_glitch.ui.screens.ObjectivesScreen // Importar la nueva pantalla ObjectivesScreen
+import com.pingu.tfg_glitch.ui.screens.OneMobileScreen
+import com.pingu.tfg_glitch.ui.screens.RulesScreen
+import com.pingu.tfg_glitch.ui.screens.FinalScoreScreen
+import com.pingu.tfg_glitch.ui.screens.ObjectivesScreen
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
 import com.pingu.tfg_glitch.ui.theme.GlitchRed
 import com.pingu.tfg_glitch.ui.theme.DarkCard
@@ -35,7 +36,7 @@ import com.pingu.tfg_glitch.ui.theme.AccentPurple
 import com.pingu.tfg_glitch.ui.theme.TextLight
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.firstOrNull
-import android.util.Log // Importar Log para depuración
+import android.util.Log
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 
@@ -55,10 +56,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Instancia del servicio para la gestión de partidas.
+// Instancias de los servicios
 private val gameService = GameService()
+private val firestoreService = FirestoreService() // CORRECCIÓN: Instancia añadida
 
-// NUEVO: Objeto para gestionar la sesión del jugador (reconexión)
 object SessionManager {
     private const val PREFS_NAME = "GranjaGlitchPrefs"
     private const val KEY_GAME_ID = "currentGameId"
@@ -88,23 +89,17 @@ object SessionManager {
 @Composable
 fun AppNavigation() {
     val context = LocalContext.current
-
-    // Leer la sesión guardada solo una vez al iniciar
     val (savedGameId, savedPlayerId) = remember { SessionManager.getSession(context) }
 
-    // Si hay una sesión guardada, empezamos en la pantalla de juego, si no, en el menú
     var currentScreen by rememberSaveable { mutableStateOf(if (savedGameId != null && savedPlayerId != null) "game" else "mainMenu") }
     var currentGameId by rememberSaveable { mutableStateOf(savedGameId) }
     var currentPlayerId by rememberSaveable { mutableStateOf(savedPlayerId) }
-
 
     when (currentScreen) {
         "mainMenu" -> MainMenuScreen(
             onStartGame = { currentScreen = "multiplayerMenu" },
             onViewRules = { currentScreen = "rules" },
-            onOneMobileMode = {
-                currentScreen = "oneMobileMode"
-            }
+            onOneMobileMode = { currentScreen = "oneMobileMode" }
         )
         "multiplayerMenu" -> MultiplayerMenuScreen(
             onBack = { currentScreen = "mainMenu" },
@@ -113,8 +108,7 @@ fun AppNavigation() {
         )
         "createGame" -> CreateGameScreen(
             onGameCreated = { gameId, hostPlayerId ->
-                Log.d("AppNavigation", "Game created: $gameId, Host Player: $hostPlayerId")
-                SessionManager.saveSession(context, gameId, hostPlayerId) // Guardar sesión
+                SessionManager.saveSession(context, gameId, hostPlayerId)
                 currentGameId = gameId
                 currentPlayerId = hostPlayerId
                 currentScreen = "game"
@@ -122,8 +116,7 @@ fun AppNavigation() {
         )
         "joinGame" -> JoinGameScreen(
             onGameJoined = { gameId, playerId ->
-                Log.d("AppNavigation", "Joined game: $gameId, Current Player: $playerId")
-                SessionManager.saveSession(context, gameId, playerId) // Guardar sesión
+                SessionManager.saveSession(context, gameId, playerId)
                 currentGameId = gameId
                 currentPlayerId = playerId
                 currentScreen = "game"
@@ -136,15 +129,11 @@ fun AppNavigation() {
                 GameScreen(
                     gameId = gameId,
                     currentPlayerId = playerId,
-                    onGameEnded = {
-                        Log.d("AppNavigation", "onGameEnded called. Navigating to FinalScoreScreen.")
-                        currentScreen = "finalScore"
-                    }
+                    onGameEnded = { currentScreen = "finalScore" }
                 )
             } else {
                 LaunchedEffect(Unit) {
-                    Log.w("AppNavigation", "gameId or playerId is null, returning to mainMenu.")
-                    SessionManager.clearSession(context) // Limpiar por si acaso
+                    SessionManager.clearSession(context)
                     currentScreen = "mainMenu"
                 }
             }
@@ -167,7 +156,7 @@ fun AppNavigation() {
                 FinalScoreScreen(
                     gameId = gameId,
                     onBackToMainMenu = {
-                        SessionManager.clearSession(context) // Limpiar sesión al volver al menú
+                        SessionManager.clearSession(context)
                         currentGameId = null
                         currentPlayerId = null
                         currentScreen = "mainMenu"
@@ -175,8 +164,7 @@ fun AppNavigation() {
                 )
             } else {
                 LaunchedEffect(Unit) {
-                    Log.w("AppNavigation", "gameId is null in finalScore, returning to mainMenu.")
-                    SessionManager.clearSession(context) // Limpiar por si acaso
+                    SessionManager.clearSession(context)
                     currentScreen = "mainMenu"
                 }
             }
@@ -184,46 +172,57 @@ fun AppNavigation() {
     }
 }
 
-// ... (El resto de GameScreen no necesita cambios) ...
 @Composable
 fun GameScreen(
     gameId: String,
     currentPlayerId: String,
     onGameEnded: () -> Unit
 ) {
-    var selectedGameScreen by remember { mutableStateOf("actions") } // Inicia en la pantalla de acciones
+    var selectedGameScreen by remember { mutableStateOf("actions") }
     val game by gameService.getGame(gameId).collectAsState(initial = null)
-    var showGameEndedDialog by remember { mutableStateOf(false) }
+    val currentPlayer by firestoreService.getPlayer(currentPlayerId).collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var isGameLoading by remember { mutableStateOf(true) }
 
+    var turnPopupShownForTurnId by remember { mutableStateOf<String?>(null) }
+
+
     val isHost = remember(game, currentPlayerId) {
-        val hostCheck = game?.hostPlayerId == currentPlayerId
-        Log.d("GameScreen", "isHost calculated: $hostCheck (gameId: $gameId, currentPlayerId: $currentPlayerId, game?.hostPlayerId: ${game?.hostPlayerId})")
-        hostCheck
+        game?.hostPlayerId == currentPlayerId
     }
 
-    LaunchedEffect(game) {
-        Log.d("GameScreen", "LaunchedEffect(game) triggered. Current game: $game")
+    LaunchedEffect(game, currentPlayer) { // Escuchar cambios en currentPlayer también
         val gameData = game
         if (gameData != null) {
             if (isGameLoading) {
-                Log.d("GameScreen", "Game data loaded for the first time.")
                 isGameLoading = false
             }
             if (gameData.hasGameEnded) {
-                Log.d("GameScreen", "Game hasGameEnded detected. Calling onGameEnded to navigate to FinalScoreScreen.")
                 onGameEnded()
+            }
+            // CORRECCIÓN SALTO DE MERCADO: Lógica para saltar el mercado si no hay inventario
+            if (gameData.roundPhase == "MARKET_PHASE" &&
+                currentPlayer?.inventario.isNullOrEmpty() && // CORRECCIÓN: Acceso a la propiedad
+                !gameData.playersFinishedMarket.contains(currentPlayerId)) {
+
+                coroutineScope.launch {
+                    gameService.playerFinishedMarket(gameId, currentPlayerId)
+                    snackbarHostState.showSnackbar(
+                        message = "No tienes nada que vender. Turno de mercado saltado.",
+                        duration = SnackbarDuration.Short
+                    )
+                }
             }
         }
         else if (game == null && !isGameLoading) {
-            Log.w("GameScreen", "Game object is null after initial load. Assuming external deletion or error. Returning to main menu.")
             onGameEnded()
         }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -268,7 +267,12 @@ fun GameScreen(
                 }
             } else {
                 when (selectedGameScreen) {
-                    "actions" -> PlayerActionsScreen(gameId = gameId, currentPlayerId = currentPlayerId)
+                    "actions" -> PlayerActionsScreen(
+                        gameId = gameId,
+                        currentPlayerId = currentPlayerId,
+                        hasShownTurnPopup = turnPopupShownForTurnId == game?.currentPlayerTurnId,
+                        onTurnPopupShown = { turnPopupShownForTurnId = game?.currentPlayerTurnId }
+                    )
                     "market" -> MarketScreen(gameId = gameId, currentPlayerId = currentPlayerId)
                     "objectives" -> ObjectivesScreen(gameId = gameId, currentPlayerId = currentPlayerId)
                     "players" -> PlayerManagementScreen(
@@ -279,31 +283,5 @@ fun GameScreen(
                 }
             }
         }
-    }
-
-    if (showGameEndedDialog) {
-        AlertDialog(
-            onDismissRequest = { /* No dismissable by user */ },
-            title = { Text("Partida Terminada") },
-            text = { Text("La partida ha sido terminada por el anfitrión de forma repentina.") },
-            confirmButton = {
-                Button(onClick = {
-                    Log.d("GameScreen", "AlertDialog Confirm Button clicked. showGameEndedDialog = false")
-                    showGameEndedDialog = false
-                    onGameEnded()
-                }) {
-                    Text("Aceptar")
-                }
-            },
-            containerColor = DarkCard,
-            titleContentColor = AccentPurple,
-            textContentColor = TextLight,
-            tonalElevation = 8.dp,
-            shape = RoundedCornerShape(16.dp),
-            properties = androidx.compose.ui.window.DialogProperties(
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false
-            )
-        )
     }
 }

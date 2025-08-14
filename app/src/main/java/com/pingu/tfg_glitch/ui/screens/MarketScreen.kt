@@ -75,17 +75,7 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
         }
     }
 
-    LaunchedEffect(isMarketPhase, currentPlayer?.inventario) {
-        if (isMarketPhase && currentPlayer?.inventario.isNullOrEmpty() && !hasPlayerFinishedMarket) {
-            coroutineScope.launch {
-                gameService.playerFinishedMarket(gameId, currentPlayerId)
-                snackbarHostState.showSnackbar(
-                    message = "No tienes nada que vender. Turno de mercado saltado.",
-                    duration = SnackbarDuration.Short
-                )
-            }
-        }
-    }
+    // El auto-skip se ha movido a GameScreen para que funcione globalmente
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -238,7 +228,11 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                                     "pimientoExplosivo" -> marketPrices.pimientoExplosivo + (game?.temporaryPriceBoosts?.get("pimiento_explosivo") ?: 0)
                                     else -> 0
                                 }
-                                val finalPrice = if (signalInterferenceActive) max(1, basePrice / 2) else basePrice
+                                var finalPrice = if (signalInterferenceActive) max(1, basePrice / 2) else basePrice
+                                // Aplicar bonus personal del comerciante
+                                if (currentPlayer?.farmerType == "Comerciante Sombrío" && currentPlayer!!.privateSaleBonus > 0) {
+                                    finalPrice += currentPlayer!!.privateSaleBonus
+                                }
 
                                 Row(
                                     modifier = Modifier

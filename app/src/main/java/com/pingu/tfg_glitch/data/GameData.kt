@@ -149,6 +149,7 @@ data class Player(
     var hasUsedStandardReroll: Boolean = false,
     var hasUsedFreeReroll: Boolean = false,
     var hasUsedActiveSkill: Boolean = false,
+    var privateSaleBonus: Int = 0, // NUEVO: Para la habilidad del Comerciante
     var mysteryButtonsRemaining: Int = 0,
     val objectivesClaimed: MutableList<String> = mutableListOf(),
     var totalScore: Int = 0,

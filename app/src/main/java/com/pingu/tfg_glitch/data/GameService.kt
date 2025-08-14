@@ -54,13 +54,7 @@ class GameService {
             id = hostPlayerId,
             gameId = newGame.id,
             name = hostName,
-            farmerType = farmerType,
-            money = 10,
-            glitchEnergy = 0,
-            hasUsedStandardReroll = false,
-            hasUsedFreeReroll = false,
-            hasUsedActiveSkill = false,
-            // ... el resto de campos se inicializan por defecto
+            farmerType = farmerType
         )
         hostDocRef.set(hostPlayer).await()
 
@@ -95,7 +89,6 @@ class GameService {
             name = "Jugador Un Móvil",
             money = 10,
             glitchEnergy = 0,
-            // ... el resto de campos se inicializan por defecto
         )
         playerDocRef.set(oneMobilePlayer).await()
 
@@ -162,10 +155,7 @@ class GameService {
             id = newPlayerId,
             gameId = gameId,
             name = playerName,
-            farmerType = farmerType,
-            money = 10,
-            glitchEnergy = 0,
-            // ... el resto de campos se inicializan por defecto
+            farmerType = farmerType
         )
 
         newPlayerDocRef.set(newPlayer).await()
@@ -425,8 +415,7 @@ class GameService {
             val player = transaction.get(playerRef).toObject<Player>() ?: return@runTransaction
             val game = transaction.get(gameRef).toObject<Game>() ?: return@runTransaction
 
-            if (player.farmerType == "Comerciante Sombrío" && player.glitchEnergy >= 1 && !player.hasUsedActiveSkill) {
-                player.glitchEnergy -= 1
+            if (player.farmerType == "Comerciante Sombrío" && !player.hasUsedActiveSkill) {
                 player.hasUsedActiveSkill = true
                 game.temporaryPriceBoosts[cropId] = (game.temporaryPriceBoosts[cropId] ?: 0) + 2
                 transaction.set(playerRef, player)
@@ -717,7 +706,6 @@ class GameService {
                     game.roundPhase = "MARKET_PHASE"
                     game.playersFinishedTurn.clear()
                     game.currentPlayerTurnId = null
-                    // La limpieza de estado de los jugadores se hace en advanceRound
                     transaction.set(gameRef, game)
                     "market_phase"
                 } else {
@@ -727,7 +715,6 @@ class GameService {
                     val nextPlayerId = playerIds[nextIndex]
                     game.currentPlayerTurnId = nextPlayerId
 
-                    // Limpiar estado del jugador que termina
                     currentPlayer.currentDiceRoll = emptyList()
                     currentPlayer.rollPhase = 0
                     currentPlayer.hasUsedStandardReroll = false
@@ -867,8 +854,9 @@ class GameService {
                 game.signalInterferenceActive = newEvent?.name == "Interferencia de Señal"
 
                 val playerIds = game.playerIds.sorted()
-                val currentStartIndex = playerIds.indexOf(game.roundStartPlayerId ?: game.hostPlayerId)
-                val nextStartIndex = (currentStartIndex + 1) % playerIds.size
+                val lastStartPlayerId = game.roundStartPlayerId ?: game.hostPlayerId!!
+                val lastStartIndex = playerIds.indexOf(lastStartPlayerId)
+                val nextStartIndex = if (lastStartIndex != -1) (lastStartIndex + 1) % playerIds.size else 0
                 val newRoundStartPlayerId = playerIds[nextStartIndex]
 
                 game.roundStartPlayerId = newRoundStartPlayerId
@@ -886,6 +874,7 @@ class GameService {
                         p.hasUsedStandardReroll = false
                         p.hasUsedFreeReroll = false
                         p.hasUsedActiveSkill = false
+                        p.privateSaleBonus = 0
                         p.mysteryButtonsRemaining = 0
                         p.activeMysteryId = null
                         p.lastMysteryResult = null
