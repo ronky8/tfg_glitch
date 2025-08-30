@@ -56,6 +56,13 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
     var showChangeDiceFaceDialog by remember { mutableStateOf(false) }
     var showFarmerSkillsDialog by remember { mutableStateOf(false) }
 
+    // Nuevo estado para el diálogo de la Visionaria Píxel
+    var showVisionaryReminderDialog by remember { mutableStateOf(false) }
+
+    // Nuevo estado para el diálogo de la Botánica Mutante
+    var showBotanistReminderDialog by remember { mutableStateOf(false) }
+
+
     // Estado derivado para evitar recomposiciones innecesarias
     val playerState by remember(currentPlayer) {
         derivedStateOf {
@@ -181,7 +188,20 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
                         onStartMystery = { coroutineScope.launch { gameService.startMysteryEncounter(currentPlayerId) } },
                         onEndTurn = { coroutineScope.launch { gameService.advanceTurn(gameId, currentPlayerId) } },
                         onUseEngineerPassive = { dieIndex -> coroutineScope.launch { gameService.usarPasivaIngeniero(currentPlayerId, dieIndex) } },
-                        onUseEngineerActive = { showChangeDiceFaceDialog = true }
+                        onUseEngineerActive = { showChangeDiceFaceDialog = true },
+                        onUseBotanistActive = {
+                            coroutineScope.launch {
+                                // Intentamos usar la habilidad, la lógica de coste y uso se maneja en GameService
+                                val success = gameService.usarActivableBotanica(currentPlayerId)
+                                if (success) showBotanistReminderDialog = true
+                            }
+                        },
+                        onUseVisionaryActive = {
+                            coroutineScope.launch {
+                                val success = gameService.usarActivableVisionaria(currentPlayerId)
+                                if (success) showVisionaryReminderDialog = true
+                            }
+                        }
                     )
                 }
             }
@@ -241,6 +261,34 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
 
     if (showFarmerSkillsDialog && currentPlayer?.granjero != null) {
         FarmerSkillsDialog(granjero = currentPlayer!!.granjero!!) { showFarmerSkillsDialog = false }
+    }
+
+    // Diálogo para la habilidad de la Botánica Mutante
+    if (showBotanistReminderDialog) {
+        AlertDialog(
+            onDismissRequest = { showBotanistReminderDialog = false },
+            title = { Text("Habilidad Activa: Botánica Mutante") },
+            text = { Text("Elige uno de tus cultivos. Hasta el final del turno, cuenta como si tuviera 2 Marcadores de Crecimiento adicionales para ser cosechado.") },
+            confirmButton = {
+                TextButton(onClick = { showBotanistReminderDialog = false }) {
+                    Text("Entendido")
+                }
+            }
+        )
+    }
+
+    // Diálogo para la habilidad de la Visionaria Píxel
+    if (showVisionaryReminderDialog) {
+        AlertDialog(
+            onDismissRequest = { showVisionaryReminderDialog = false },
+            title = { Text("Habilidad Activa: Visionaria Píxel") },
+            text = { Text("Mira las 3 cartas superiores del Mazo Principal. Añade 1 a tu mano y coloca las otras 2 en la parte superior del mazo en el orden que elijas.") },
+            confirmButton = {
+                TextButton(onClick = { showVisionaryReminderDialog = false }) {
+                    Text("Entendido")
+                }
+            }
+        )
     }
 }
 
@@ -455,6 +503,7 @@ private fun DiceSection(
 
 /**
  * [MODIFICADO] Muestra los botones de acción principales según la fase de la tirada.
+ * Se añaden los botones para las habilidades activas de la Botánica y la Visionaria.
  */
 @Composable
 private fun ActionButtons(
@@ -467,6 +516,8 @@ private fun ActionButtons(
     onEndTurn: () -> Unit,
     onUseEngineerPassive: (Int) -> Unit,
     onUseEngineerActive: () -> Unit,
+    onUseBotanistActive: () -> Unit,
+    onUseVisionaryActive: () -> Unit
 ) {
     var showEngineerPassiveReroll by remember { mutableStateOf(false) }
 
@@ -482,6 +533,8 @@ private fun ActionButtons(
                         Icon(Icons.Default.Casino, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                         Text("Tirar Dados")
                     }
+                    // Botones de habilidades en la fase 0 para que siempre estén disponibles en el turno
+                    HabilityButtons(playerState, canPerformActions, onUseBotanistActive, onUseVisionaryActive)
                 }
                 1 -> {
                     // Botones de reroll normal y confirmar
@@ -493,14 +546,14 @@ private fun ActionButtons(
                             Text("Confirmar")
                         }
                     }
-                    // Habilidades del Ingeniero
+                    // Habilidades del Ingeniero, Botánico y Visionario
                     if (playerState.granjero?.id == "ingeniero_glitch") {
                         Button(
                             onClick = { showEngineerPassiveReroll = true },
                             enabled = canPerformActions && !playerState.haUsadoPasivaIngeniero,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Usar Reroll Pasivo (1 dado)")
+                            Text("Usar Reroll Pasivo")
                         }
                         Button(
                             onClick = onUseEngineerActive,
@@ -510,13 +563,16 @@ private fun ActionButtons(
                             Text("Activar Habilidad (1⚡)")
                         }
                     }
+                    HabilityButtons(playerState, canPerformActions, onUseBotanistActive, onUseVisionaryActive)
                 }
                 2 -> {
+                    // Botón de resolver misterio (opcional)
                     if (playerState.mysteryButtonsRemaining > 0) {
                         Button(onClick = onStartMystery, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
                             Text("Resolver Misterio (${playerState.mysteryButtonsRemaining})")
                         }
                     }
+                    // Botón para terminar el turno (siempre visible en la fase 2)
                     Button(onClick = onEndTurn, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp)) {
                         Text("Terminar Turno")
                     }
@@ -525,6 +581,7 @@ private fun ActionButtons(
         }
     }
 
+    // Diálogo para la pasiva del Ingeniero (no necesita cambios)
     if (showEngineerPassiveReroll) {
         AlertDialog(
             onDismissRequest = { showEngineerPassiveReroll = false },
@@ -535,10 +592,10 @@ private fun ActionButtons(
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         playerState.currentDiceRoll.forEachIndexed { index, symbol ->
-                            DiceView(symbol = symbol, isKept = false, isEnabled = true, onClick = {
+                            DiceView(symbol, false, true) {
                                 onUseEngineerPassive(index)
                                 showEngineerPassiveReroll = false
-                            })
+                            }
                         }
                     }
                 }
@@ -550,10 +607,44 @@ private fun ActionButtons(
     }
 }
 
-
-// ========================================================================
-// --- Componentes de UI específicos de esta pantalla ---
-// ========================================================================
+/**
+ * [NUEVO] Componente auxiliar para agrupar los botones de habilidades activas.
+ */
+@Composable
+private fun HabilityButtons(
+    playerState: PlayerStateSnapshot,
+    canPerformActions: Boolean,
+    onUseBotanistActive: () -> Unit,
+    onUseVisionaryActive: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Habilidad de la Botánica Mutante
+        if (playerState.granjero?.id == "botanica_mutante") {
+            OutlinedButton(
+                onClick = onUseBotanistActive,
+                enabled = canPerformActions && playerState.glitchEnergy >= 2 && !playerState.haUsadoHabilidadActiva,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.LocalFlorist, contentDescription = "Activar Habilidad Botánica", modifier = Modifier.size(18.dp))
+                Text("Activar (2⚡)", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        // Habilidad de la Visionaria Píxel
+        if (playerState.granjero?.id == "visionaria_pixel") {
+            OutlinedButton(
+                onClick = onUseVisionaryActive,
+                enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Visibility, contentDescription = "Activar Habilidad Visionaria", modifier = Modifier.size(18.dp))
+                Text("Activar (1⚡)", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
 
 /**
  * Un `data class` para crear una instantánea del estado del jugador.

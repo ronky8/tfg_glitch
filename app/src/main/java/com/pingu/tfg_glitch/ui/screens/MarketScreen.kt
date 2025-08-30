@@ -48,12 +48,15 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
         derivedStateOf { game?.playersFinishedMarket?.contains(currentPlayerId) ?: false }
     }
 
+    // Nuevo estado para el diálogo del comerciante
+    var showMerchantReminderDialog by remember { mutableStateOf(false) }
+
     val currentMarketPrices = remember(game?.marketPrices, game?.signalInterferenceActive) {
         val prices = game?.marketPrices ?: initialMarketPrices
         if (game?.signalInterferenceActive == true) {
             prices.copy(
                 zanahoria = max(1, prices.zanahoria / 2),
-                maiz = max(1, prices.maiz / 2),
+                trigo = max(1, prices.trigo / 2),
                 patata = max(1, prices.patata / 2),
                 tomateCubico = max(1, prices.tomateCubico / 2),
                 maizArcoiris = max(1, prices.maizArcoiris / 2),
@@ -113,25 +116,61 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 }
             }
 
-            // Botón de acción fijo en la parte inferior
+            // Botones de acción fijo en la parte inferior
             if (isMarketPhase) {
-                Button(
-                    onClick = {
-                        coroutineScope.launch {
-                            gameService.playerFinishedMarket(gameId, currentPlayerId)
-                            snackbarHostState.showSnackbar("Has terminado tus acciones en el Mercado.")
-                        }
-                    },
-                    enabled = !hasPlayerFinishedMarket,
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                        .height(56.dp)
+                        .padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(if (hasPlayerFinishedMarket) "Esperando a otros..." else "He Terminado en el Mercado")
+                    // Botón para la habilidad activa del Comerciante Sombrío
+                    if (currentPlayer?.granjero?.id == "comerciante_sombrio") {
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val success = gameService.usarActivableComerciante(currentPlayerId)
+                                    if (success) showMerchantReminderDialog = true
+                                }
+                            },
+                            enabled = !hasPlayerFinishedMarket && !(currentPlayer?.haUsadoHabilidadActiva ?: false) && (currentPlayer?.glitchEnergy ?: 0) >= 1,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Text("Activar Habilidad Comerciante (1⚡)")
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                gameService.playerFinishedMarket(gameId, currentPlayerId)
+                                snackbarHostState.showSnackbar("Has terminado tus acciones en el Mercado.")
+                            }
+                        },
+                        enabled = !hasPlayerFinishedMarket,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                    ) {
+                        Text(if (hasPlayerFinishedMarket) "Esperando a otros..." else "He Terminado en el Mercado")
+                    }
                 }
             }
         }
+    }
+
+    // Diálogo para la habilidad del Comerciante Sombrío
+    if (showMerchantReminderDialog) {
+        AlertDialog(
+            onDismissRequest = { showMerchantReminderDialog = false },
+            title = { Text("Habilidad Activa: Comerciante Sombrío") },
+            text = { Text("Hasta el final de esta fase de Mercado, ganas 1 Moneda adicional por cada cultivo que vendas. Esto se aplicará automáticamente.") },
+            confirmButton = {
+                TextButton(onClick = { showMerchantReminderDialog = false }) {
+                    Text("Entendido")
+                }
+            }
+        )
     }
 }
 
@@ -202,7 +241,7 @@ private fun CombinedMarketAndInventoryView(
                 val currentPrice = remember(crop.id, marketPrices) {
                     when (crop.id) {
                         "zanahoria" -> marketPrices.zanahoria
-                        "maiz" -> marketPrices.maiz
+                        "trigo" -> marketPrices.trigo
                         "patata" -> marketPrices.patata
                         "tomateCubico" -> marketPrices.tomateCubico
                         "maizArcoiris" -> marketPrices.maizArcoiris

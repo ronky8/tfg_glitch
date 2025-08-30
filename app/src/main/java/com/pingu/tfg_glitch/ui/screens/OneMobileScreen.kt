@@ -181,7 +181,7 @@ private fun MarketPricesCard(marketPrices: MarketPrices?) {
             if (marketPrices != null) {
                 val cropList = listOf(
                     "Zanahoria" to marketPrices.zanahoria,
-                    "Maíz Común" to marketPrices.maiz,
+                    "Trigo Común" to marketPrices.trigo,
                     "Patata Terrosa" to marketPrices.patata,
                     "Tomate Cúbico" to marketPrices.tomateCubico,
                     "Maíz Arcoíris" to marketPrices.maizArcoiris,

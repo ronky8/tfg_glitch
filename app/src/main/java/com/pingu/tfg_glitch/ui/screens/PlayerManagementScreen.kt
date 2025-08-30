@@ -138,12 +138,6 @@ fun PlayerManagementScreen(
                     gameService.endGameByPoints(gameId)
                     showEndGameDialog = false
                 }
-            },
-            onEndAbruptly = {
-                coroutineScope.launch {
-                    gameService.markGameAsEnded(gameId)
-                    showEndGameDialog = false
-                }
             }
         )
     }
@@ -198,13 +192,15 @@ private fun PlayerCard(
 
     // Calcular PV
     val totalPV = remember(player) {
-        val moneyPV = player.money / 5
-        val totalUnsoldValue = player.inventario.sumOf { it.valorVentaBase * it.cantidad }
-        val unsoldCropsPV = (totalUnsoldValue.toDouble() / 3.0).roundToInt()
-        val objectivesPV = player.objectivesClaimed.sumOf { objId ->
-            allObjectives.find { it.id == objId }?.rewardPV ?: 0
-        }
-        moneyPV + unsoldCropsPV + objectivesPV + player.manualBonusPV
+        val unsoldCropsValue = player.inventario.sumOf { it.valorVentaBase.toLong() * it.cantidad.toLong() }
+        val unsoldCropsMoney = (unsoldCropsValue.toDouble() / 2.0).roundToInt()
+        val finalMoney = player.money + unsoldCropsMoney
+
+        val moneyPV = finalMoney / 3
+        val energyPV = player.glitchEnergy
+        val objectivesPV = 0 // Los objetivos ya no dan PV directo
+
+        moneyPV + energyPV + objectivesPV + player.manualBonusPV
     }
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -346,28 +342,15 @@ private fun HostControls(
 @Composable
 private fun EndGameDialog(
     onDismiss: () -> Unit,
-    onEndByPoints: () -> Unit,
-    onEndAbruptly: () -> Unit
+    onEndByPoints: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("¿Terminar la partida?") },
-        text = { Text("Puedes calcular los puntos finales o terminarla de forma repentina (no se podrá ver la puntuación).") },
+        text = { Text("Finalizar la partida ahora y ver la puntuación final.") },
         confirmButton = {
-            Column {
-                Button(
-                    onClick = onEndByPoints,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Terminar y Ver Puntuación")
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = onEndAbruptly,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Terminar Repentinamente")
-                }
+            Button(onClick = onEndByPoints) {
+                Text("Terminar y Ver Puntuación")
             }
         },
         dismissButton = {

@@ -50,20 +50,24 @@ fun FinalScoreScreen(
             } else {
                 allPlayers
                     .map { player ->
-                        val moneyPV = player.money / 5
-                        val totalUnsoldValue = player.inventario.sumOf { it.valorVentaBase * it.cantidad }
-                        val unsoldCropsPV = (totalUnsoldValue.toDouble() / 3.0).roundToInt()
-                        val objectivesPV = player.objectivesClaimed.sumOf { objId ->
-                            allObjectives.find { it.id == objId }?.rewardPV ?: 0
-                        }
-                        val totalPV = moneyPV + unsoldCropsPV + objectivesPV + player.manualBonusPV
+                        // Calcular valor de cultivos no vendidos y sumarlo a las monedas
+                        val totalUnsoldValue = player.inventario.sumOf { it.valorVentaBase.toLong() * it.cantidad.toLong() }
+                        val unsoldCropsMoney = (totalUnsoldValue.toDouble() / 2.0).roundToInt()
+                        val finalMoney = player.money + unsoldCropsMoney
+
+                        val moneyPV = finalMoney / 3 // CAMBIO: Ahora 3 monedas = 1 PV
+                        val energyPV = player.glitchEnergy // NUEVO: 1 Energía = 1 PV
+                        // Los objetivos ya no dan PV directo, su recompensa ya está en monedas y energía
+                        val objectivesPV = 0
+                        val totalPV = moneyPV + energyPV + objectivesPV + player.manualBonusPV
 
                         PlayerScore(
                             player = player,
                             moneyPV = moneyPV,
-                            unsoldCropsPV = unsoldCropsPV,
+                            energyPV = energyPV,
                             objectivesPV = objectivesPV,
-                            totalPV = totalPV
+                            totalPV = totalPV,
+                            unsoldCropsMoney = unsoldCropsMoney
                         )
                     }
                     .sortedByDescending { it.totalPV } // Ordenar de mayor a menor puntuación
@@ -149,9 +153,10 @@ fun FinalScoreScreen(
 private data class PlayerScore(
     val player: Player,
     val moneyPV: Int,
-    val unsoldCropsPV: Int,
+    val energyPV: Int, // NUEVO: PV por energía
     val objectivesPV: Int,
-    val totalPV: Int
+    val totalPV: Int,
+    val unsoldCropsMoney: Int
 )
 
 /**
@@ -228,9 +233,12 @@ private fun PlayerScoreCard(score: PlayerScore, rank: Int) {
             Divider(modifier = Modifier.padding(vertical = 8.dp))
 
             // Desglose de puntos
-            ScoreDetailRow("Monedas", "${score.player.money} 💰", "${score.moneyPV} PV")
-            ScoreDetailRow("Cultivos no vendidos", "${score.player.inventario.sumOf { it.cantidad }}", "${score.unsoldCropsPV} PV")
-            ScoreDetailRow("Objetivos", "${score.player.objectivesClaimed.size}", "${score.objectivesPV} PV")
+            ScoreDetailRow("Monedas", "${score.player.money + score.unsoldCropsMoney} 💰", "${score.moneyPV} PV")
+            if (score.unsoldCropsMoney > 0) {
+                ScoreDetailRow("Venta de cultivos", "(${score.player.inventario.sumOf { it.cantidad }} cultivos)", "+${score.unsoldCropsMoney} 💰")
+            }
+            ScoreDetailRow("Energía Glitch", "${score.player.glitchEnergy} ⚡", "${score.energyPV} PV") // NUEVO: Muestra PV por energía
+            ScoreDetailRow("Objetivos", "${score.player.objectivesClaimed.size}", "Reclamados")
             if (score.player.manualBonusPV != 0) {
                 ScoreDetailRow("Ajuste Manual", "", "${score.player.manualBonusPV} PV")
             }
@@ -281,4 +289,3 @@ fun FinalScoreScreenPreview() {
         }
     }
 }
-

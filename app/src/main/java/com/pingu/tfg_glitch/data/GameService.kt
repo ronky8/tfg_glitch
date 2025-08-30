@@ -86,11 +86,12 @@ class GameService {
      */
     suspend fun createGame(hostName: String, granjeroId: String): Pair<String, String> {
         val gameId = generateGameCode()
-        val selectedObjectives = allObjectives.shuffled(Random).take(3).toMutableList()
+        val selectedObjectives = allGameObjectives.shuffled(Random).take(3).toMutableList()
         val newGame = Game(
             id = gameId,
             activeObjectives = selectedObjectives,
-            marketPrices = initialMarketPrices
+            marketPrices = initialMarketPrices,
+            roundObjective = allRoundObjectives.random()
         )
         gamesCollection.document(newGame.id).set(newGame).await()
 
@@ -130,11 +131,12 @@ class GameService {
      */
     suspend fun createOneMobileGame(): Pair<String, String> {
         val gameId = generateGameCode()
-        val selectedObjectives = allObjectives.shuffled(Random).take(3).toMutableList()
+        val selectedObjectives = allGameObjectives.shuffled(Random).take(3).toMutableList()
         val newGame = Game(
             id = gameId,
             activeObjectives = selectedObjectives,
-            marketPrices = initialMarketPrices
+            marketPrices = initialMarketPrices,
+            roundObjective = allRoundObjectives.random()
         )
         gamesCollection.document(newGame.id).set(newGame).await()
 
@@ -285,8 +287,7 @@ class GameService {
      */
     suspend fun endGameByPoints(gameId: String) {
         try {
-            val gameRef = gamesCollection.document(gameId)
-            gameRef.update("hasGameEnded", true).await()
+            gamesCollection.document(gameId).update("hasGameEnded", true).await()
             Log.d(
                 "GameService",
                 "Game $gameId marked as ended by points successfully. Data remains for score screen."
@@ -528,7 +529,8 @@ class GameService {
     suspend fun resolveMinigameOutcome(playerId: String, wasSuccessful: Boolean) {
         val playerRef = playersCollection.document(playerId)
         db.runTransaction { transaction ->
-            val player = transaction.get(playerRef).toObject<Player>()
+            val player =
+                transaction.get(playerRef).toObject<Player>() as? Player
             if (player?.activeMysteryId == null) return@runTransaction
 
             val encounter =
@@ -632,7 +634,7 @@ class GameService {
                 // Calcular el precio de venta real, aplicando el evento temporal si está activo.
                 var marketPrice = when (cropId) {
                     "zanahoria" -> game.marketPrices.zanahoria
-                    "maiz" -> game.marketPrices.maiz
+                    "trigo" -> game.marketPrices.trigo
                     "patata" -> game.marketPrices.patata
                     "tomateCubico" -> game.marketPrices.tomateCubico
                     "maizArcoiris" -> game.marketPrices.maizArcoiris
@@ -646,11 +648,21 @@ class GameService {
                     marketPrice = max(1, marketPrice / 2)
                 }
 
+                var bonusMoney = 0
+                // Habilidad activa del comerciante
+                if(player.granjero?.id == "comerciante_sombrio" && player.haUsadoHabilidadActiva) {
+                    bonusMoney += quantity * 1
+                }
+                // Habilidad pasiva del comerciante
+                if(player.granjero?.id == "comerciante_sombrio" && quantity >= 2) {
+                    bonusMoney += (quantity / 2) * 1
+                }
+
                 inventoryItem.cantidad -= quantity
                 if (inventoryItem.cantidad == 0) {
                     player.inventario.remove(inventoryItem)
                 }
-                player.money += quantity * marketPrice
+                player.money += (quantity * marketPrice) + bonusMoney
                 transaction.set(playerRef, player)
             }.await()
             true
@@ -718,6 +730,17 @@ class GameService {
                     game.roundPhase = "MARKET_PHASE"
                     game.playersFinishedTurn.clear()
                     game.currentPlayerTurnId = null
+
+                    // Asegurarse de que el estado de 'haUsadoHabilidadActiva' del Comerciante se resetea al entrar en el mercado
+                    // Esto es necesario para que pueda usar su habilidad activa una vez por ronda, no una vez por turno de dados
+                    val players = game.playerIds.mapNotNull { transaction.get(playersCollection.document(it)).toObject<Player>() }
+                    players.forEach {
+                        if (it.haUsadoHabilidadActiva && it.granjero?.id == "comerciante_sombrio") {
+                            it.haUsadoHabilidadActiva = false
+                            transaction.set(playersCollection.document(it.id), it)
+                        }
+                    }
+
                     transaction.set(gameRef, game)
                     "market_phase"
                 } else {
@@ -732,12 +755,14 @@ class GameService {
                     currentPlayer.rollPhase = 0
                     currentPlayer.hasRerolled = false
                     currentPlayer.haUsadoPasivaIngeniero = false
-                    currentPlayer.haUsadoHabilidadActiva =
-                        false // ¡NUEVO! Resetea la habilidad activa
+                    currentPlayer.haUsadoHabilidadActiva = false // Se resetea la habilidad activa
                     currentPlayer.mysteryButtonsRemaining = 0
                     currentPlayer.activeMysteryId = null
                     currentPlayer.lastMysteryResult = null
+
+                    // GUARDAMOS AMBOS DOCUMENTOS EN LA MISMA TRANSACCIÓN
                     transaction.set(playerRef, currentPlayer)
+                    transaction.set(gameRef, game)
                     nextPlayerId
                 }
             }.await()
@@ -862,7 +887,7 @@ class GameService {
                         currentPrices.zanahoria,
                         basePrices["zanahoria"] ?: 3
                     ),
-                    maiz = calculateNewPrice(currentPrices.maiz, basePrices["maiz"] ?: 4),
+                    trigo = calculateNewPrice(currentPrices.trigo, basePrices["trigo"] ?: 4),
                     patata = calculateNewPrice(currentPrices.patata, basePrices["patata"] ?: 3),
                     tomateCubico = calculateNewPrice(
                         currentPrices.tomateCubico,
@@ -895,7 +920,7 @@ class GameService {
                     "Interferencia de Señal" -> newSignalInterferenceActive = true
                     "Fiebre del Oro" -> {
                         currentPrices = newMarketPrices.copy(
-                            maiz = newMarketPrices.maiz + 2,
+                            trigo = newMarketPrices.trigo + 2,
                             patata = newMarketPrices.patata + 2
                         )
                     }
@@ -903,7 +928,7 @@ class GameService {
                     "Aumento de Demanda" -> {
                         currentPrices = newMarketPrices.copy(
                             zanahoria = newMarketPrices.zanahoria + 1,
-                            maiz = newMarketPrices.maiz + 1,
+                            trigo = newMarketPrices.trigo + 1,
                             patata = newMarketPrices.patata + 1
                         )
                     }
@@ -943,6 +968,7 @@ class GameService {
                 game.roundPhase = "PLAYER_ACTIONS"
                 game.playersFinishedMarket.clear()
                 game.roundNumber += 1
+                game.roundObjective = allRoundObjectives.random()
                 game.currentPlayerTurnId = game.playerOrder.getOrNull(game.roundNumber % game.playerOrder.size)
                 transaction.set(gameRef, game)
 
@@ -1027,7 +1053,7 @@ class GameService {
                         currentPrices.zanahoria,
                         basePrices["zanahoria"] ?: 3
                     ),
-                    maiz = calculateNewPrice(currentPrices.maiz, basePrices["maiz"] ?: 4),
+                    trigo = calculateNewPrice(currentPrices.trigo, basePrices["trigo"] ?: 4),
                     patata = calculateNewPrice(currentPrices.patata, basePrices["patata"] ?: 3),
                     tomateCubico = calculateNewPrice(
                         currentPrices.tomateCubico,
@@ -1060,7 +1086,7 @@ class GameService {
                     "Interferencia de Señal" -> newSignalInterferenceActive = true
                     "Fiebre del Oro" -> {
                         currentPrices = newMarketPrices.copy(
-                            maiz = newMarketPrices.maiz + 2,
+                            trigo = newMarketPrices.trigo + 2,
                             patata = newMarketPrices.patata + 2
                         )
                     }
@@ -1068,7 +1094,7 @@ class GameService {
                     "Aumento de Demanda" -> {
                         currentPrices = newMarketPrices.copy(
                             zanahoria = newMarketPrices.zanahoria + 1,
-                            maiz = newMarketPrices.maiz + 1,
+                            trigo = newMarketPrices.trigo + 1,
                             patata = newMarketPrices.patata + 1
                         )
                     }
@@ -1108,6 +1134,7 @@ class GameService {
                 game.roundPhase = "PLAYER_ACTIONS"
                 game.playersFinishedMarket.clear()
                 game.roundNumber += 1
+                game.roundObjective = allRoundObjectives.random()
                 game.currentPlayerTurnId = game.playerOrder.firstOrNull() // Director de juego
                 transaction.set(gameRef, game)
 
@@ -1117,6 +1144,7 @@ class GameService {
             false
         }
     }
+
 
     suspend fun updatePlayerOrderAndStartGame(gameId: String, orderedPlayerIds: List<String>) {
         val gameRef = gamesCollection.document(gameId)
@@ -1221,6 +1249,90 @@ class GameService {
     }
 
     /**
+     * [CORREGIDO] Habilidad activa de la Botánica Mutante.
+     */
+    suspend fun usarActivableBotanica(playerId: String): Boolean {
+        val playerRef = playersCollection.document(playerId)
+        return try {
+            db.runTransaction { transaction ->
+                val player = transaction.get(playerRef).toObject<Player>()
+                    ?: throw Exception("Player not found")
+                if (player.granjero?.id == "botanica_mutante" &&
+                    player.glitchEnergy >= 2 &&
+                    !player.haUsadoHabilidadActiva
+                ) {
+                    player.glitchEnergy -= 2
+                    player.haUsadoHabilidadActiva = true
+                    // La lógica del efecto es física, pero la app registra el coste y el uso
+                    transaction.set(playerRef, player)
+                    true
+                } else {
+                    false
+                }
+            }.await()
+        } catch (e: Exception) {
+            Log.e("GameService", "Error en usarActivableBotanica: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * [CORREGIDO] Habilidad activa del Comerciante Sombrio.
+     */
+    suspend fun usarActivableComerciante(playerId: String): Boolean {
+        val playerRef = playersCollection.document(playerId)
+        return try {
+            db.runTransaction { transaction ->
+                val player = transaction.get(playerRef).toObject<Player>()
+                    ?: throw Exception("Player not found")
+                if (player.granjero?.id == "comerciante_sombrio" &&
+                    player.glitchEnergy >= 1 &&
+                    !player.haUsadoHabilidadActiva
+                ) {
+                    player.glitchEnergy -= 1
+                    player.haUsadoHabilidadActiva = true
+                    // La lógica del efecto se maneja en la pantalla de mercado
+                    transaction.set(playerRef, player)
+                    true
+                } else {
+                    false
+                }
+            }.await()
+        } catch (e: Exception) {
+            Log.e("GameService", "Error en usarActivableComerciante: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * [CORREGIDO] Habilidad activa de la Visionaria Pixel.
+     */
+    suspend fun usarActivableVisionaria(playerId: String): Boolean {
+        val playerRef = playersCollection.document(playerId)
+        return try {
+            db.runTransaction { transaction ->
+                val player = transaction.get(playerRef).toObject<Player>()
+                    ?: throw Exception("Player not found")
+                if (player.granjero?.id == "visionaria_pixel" &&
+                    player.glitchEnergy >= 1 &&
+                    !player.haUsadoHabilidadActiva
+                ) {
+                    player.glitchEnergy -= 1
+                    player.haUsadoHabilidadActiva = true
+                    // La lógica del efecto es física, pero la app registra el coste y el uso
+                    transaction.set(playerRef, player)
+                    true
+                } else {
+                    false
+                }
+            }.await()
+        } catch (e: Exception) {
+            Log.e("GameService", "Error en usarActivableVisionaria: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
      * Attempts to claim an objective for a player.
      */
     suspend fun claimObjective(gameId: String, playerId: String, objectiveId: String): String {
@@ -1232,87 +1344,85 @@ class GameService {
                 val player = transaction.get(playerRef).toObject<Player>()
                 if (game == null || player == null) return@runTransaction "Error: Partida o jugador no encontrados."
 
-                val objective = allObjectives.find { it.id == objectiveId }
+                val objective = allGameObjectives.find { it.id == objectiveId }
+                    ?: allRoundObjectives.find { it.id == objectiveId }
                 if (objective == null) return@runTransaction "Error: Objetivo no encontrado."
 
-                if (!game.activeObjectives.any { it.id == objective.id }) return@runTransaction "Este objetivo no está activo."
-                if (player.objectivesClaimed.contains(objectiveId)) return@runTransaction "Ya has reclamado este objetivo."
+                // Verificar si el objetivo está activo en la partida y no ha sido reclamado
+                val isGameObjective = game.activeObjectives.any { it.id == objective.id }
+                val isRoundObjective = game.roundObjective?.id == objective.id
+                if (!isGameObjective && !isRoundObjective) {
+                    return@runTransaction "Este objetivo no está activo."
+                }
+
+                // Comprobación de que no ha sido reclamado por otro jugador
+                val claimedByPlayerId = game.claimedObjectivesByPlayer[objectiveId]
+                if (claimedByPlayerId != null) {
+                    return@runTransaction "Este objetivo ya ha sido reclamado por otro jugador."
+                }
 
                 var canClaim = false
                 var feedback = ""
 
                 when (objective.type) {
                     "money" -> {
-                        if (player.money >= objective.targetValue) {
-                            canClaim = true
-                            feedback =
-                                "¡Objetivo de Monedas completado! Ganaste ${objective.rewardPV} PV."
-                        } else {
-                            feedback =
-                                "Necesitas ${objective.targetValue} monedas. Tienes ${player.money}."
-                        }
+                        if (player.money >= objective.targetValue) { canClaim = true }
+                        else { feedback = "Necesitas ${objective.targetValue} monedas. Tienes ${player.money}." }
                     }
-
                     "total_harvest" -> {
                         val totalHarvested = player.inventario.sumOf { it.cantidad }
-                        if (totalHarvested >= objective.targetValue) {
-                            canClaim = true
-                            feedback =
-                                "¡Objetivo de Cosecha Total completado! Ganaste ${objective.rewardPV} PV."
-                        } else {
-                            feedback =
-                                "Necesitas cosechar ${objective.targetValue} cultivos. Llevas $totalHarvested."
-                        }
+                        if (totalHarvested >= objective.targetValue) { canClaim = true }
+                        else { feedback = "Necesitas cosechar ${objective.targetValue} cultivos. Llevas $totalHarvested." }
                     }
-
                     "specific_harvest" -> {
-                        val specificCropCount =
-                            player.inventario.find { it.id == objective.targetCropId }?.cantidad
-                                ?: 0
-                        if (specificCropCount >= objective.targetValue) {
-                            canClaim = true
-                            val cropName = allCrops.find { it.id == objective.targetCropId }?.nombre
-                                ?: "cultivo"
-                            feedback =
-                                "¡Objetivo de Cosecha de $cropName completado! Ganaste ${objective.rewardPV} PV."
-                        } else {
-                            val cropName = allCrops.find { it.id == objective.targetCropId }?.nombre
-                                ?: "cultivos"
-                            feedback =
-                                "Necesitas ${objective.targetValue} de $cropName. Tienes $specificCropCount."
+                        val specificCropCount = player.inventario.find { it.id == objective.targetCropId }?.cantidad ?: 0
+                        if (specificCropCount >= objective.targetValue) { canClaim = true }
+                        else {
+                            val cropName = allCrops.find { it.id == objective.targetCropId }?.nombre ?: "cultivos"
+                            feedback = "Necesitas ${objective.targetValue} de $cropName. Tienes $specificCropCount."
                         }
                     }
-
                     "dice_roll_all_same" -> {
                         val firstSymbol = player.currentDiceRoll.firstOrNull()
-                        val allSame =
-                            firstSymbol != null && player.currentDiceRoll.all { it == firstSymbol }
-                        if (allSame && player.currentDiceRoll.isNotEmpty()) {
-                            canClaim = true
-                            feedback =
-                                "¡Objetivo de Tirada Perfecta completado! Ganaste ${objective.rewardPV} PV."
-                        } else {
-                            feedback = "Necesitas una tirada de 4 dados con el mismo símbolo."
-                        }
+                        val allSame = firstSymbol != null && player.currentDiceRoll.all { it == firstSymbol }
+                        if (allSame && player.currentDiceRoll.isNotEmpty()) { canClaim = true }
+                        else { feedback = "Necesitas una tirada de 4 dados con el mismo símbolo." }
                     }
-
+                    "plant_count" -> {
+                        // El seguimiento es manual. Asumimos honestidad del jugador.
+                        canClaim = true
+                        feedback = "Objetivo de ronda reclamado."
+                    }
+                    "sell_count" -> {
+                        // Similar a "plant_count", el seguimiento es manual.
+                        canClaim = true
+                        feedback = "Objetivo de ronda reclamado."
+                    }
+                    "roll_specific_dice" -> {
+                        val hasRolledSpecificDice = player.currentDiceRoll.any { it.name == objective.targetCropId }
+                        if (hasRolledSpecificDice) { canClaim = true }
+                        else { feedback = "Debes sacar un dado de Energía (⚡) en tu tirada." }
+                    }
                     else -> feedback = "Tipo de objetivo desconocido."
                 }
 
                 if (canClaim) {
                     player.objectivesClaimed.add(objective.id)
+                    player.money += objective.reward.moneyChange
+                    player.glitchEnergy += objective.reward.energyChange
+
+                    // CORREGIDO: Usamos la función put para asignar el valor, no la propiedad de una lista
+                    game.claimedObjectivesByPlayer.put(objectiveId, playerId)
+
                     transaction.set(playerRef, player)
-                    return@runTransaction feedback
+                    transaction.set(gameRef, game)
+                    return@runTransaction objective.reward.description
                 } else {
                     return@runTransaction feedback
                 }
             }.await()
         } catch (e: Exception) {
-            Log.e(
-                "GameService",
-                "Error al reclamar objetivo $objectiveId para jugador $playerId: ${e.message}",
-                e
-            )
+            Log.e("GameService", "Error al reclamar objetivo $objectiveId para jugador $playerId: ${e.message}", e)
             "Error al reclamar objetivo: ${e.message}"
         }
     }

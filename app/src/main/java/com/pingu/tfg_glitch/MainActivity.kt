@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            GranjaGlitchAppTheme {
+            GranjaGlitchAppTheme(selectedTheme = "TierraGlitch") {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -62,6 +62,11 @@ fun AppNavigation(userDataStore: UserDataStore) {
 
     var lastEventName by rememberSaveable { mutableStateOf<String?>(null) }
     var showEventDialog by rememberSaveable { mutableStateOf(false) }
+
+    // NUEVO: Estado para el pop-up de inicio de turno y el ID de turno del que se mostró
+    var showTurnStartDialog by rememberSaveable { mutableStateOf(false) }
+    var lastTurnStartPlayerId by rememberSaveable { mutableStateOf<String?>(null) }
+    var lastRoundNumber by rememberSaveable { mutableStateOf(-1) }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -95,9 +100,17 @@ fun AppNavigation(userDataStore: UserDataStore) {
 
     LaunchedEffect(game) {
         val currentGame = game
+        // Lógica para mostrar pop-up de evento
         if (currentGame?.lastEvent?.name != null && currentGame.lastEvent?.name != lastEventName) {
             lastEventName = currentGame.lastEvent!!.name
             showEventDialog = true
+        }
+        // Lógica para mostrar pop-up de inicio de turno
+        if (currentGame != null && currentGame.currentPlayerTurnId == currentPlayerId) {
+            if (currentGame.roundNumber != lastRoundNumber) {
+                lastRoundNumber = currentGame.roundNumber
+                showTurnStartDialog = true
+            }
         }
     }
 
@@ -235,6 +248,21 @@ fun AppNavigation(userDataStore: UserDataStore) {
                 }
             )
         }
+    }
+    // NUEVO: Diálogo de inicio de turno, movido aquí para controlar su estado a nivel global
+    if (showTurnStartDialog && game?.currentPlayerTurnId == currentPlayerId) {
+        AlertDialog(
+            onDismissRequest = { showTurnStartDialog = false },
+            title = { Text(text = "¡Es tu turno!") },
+            text = {
+                Text(text = "Antes de tirar los dados, recuerda: \n\n1. Roba una carta del mazo principal.\n2. Coloca un marcador de crecimiento sobre cada uno de tus cultivos.\n3. Puedes plantar un cultivo normal de tu mano.")
+            },
+            confirmButton = {
+                TextButton(onClick = { showTurnStartDialog = false }) {
+                    Text("¡Entendido!")
+                }
+            }
+        )
     }
 }
 

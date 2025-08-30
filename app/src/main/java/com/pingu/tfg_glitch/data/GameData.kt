@@ -157,7 +157,7 @@ data class Player(
 
 data class MarketPrices(
     val zanahoria: Int = 0,
-    val maiz: Int = 0,
+    val trigo: Int = 0,
     val patata: Int = 0,
     val tomateCubico: Int = 0,
     val maizArcoiris: Int = 0,
@@ -168,17 +168,18 @@ data class MarketPrices(
 data class Objective(
     val id: String = UUID.randomUUID().toString(),
     val description: String = "",
-    val rewardPV: Int = 0,
+    val reward: MysteryOutcome = MysteryOutcome(), // Recompensa instantánea, no PV
     val type: String = "",
     val targetValue: Int = 0,
-    val targetCropId: String? = null
+    val targetCropId: String? = null,
+    val isRoundObjective: Boolean = false
 )
 
 
 // --- Constantes y Datos Iniciales ---
 val initialMarketPrices = MarketPrices(
     zanahoria = 3,
-    maiz = 4,
+    trigo = 4,
     patata = 3,
     tomateCubico = 6,
     maizArcoiris = 7,
@@ -192,7 +193,7 @@ val eventosGlitch = listOf(
     GlitchEvent(name = "Interferencia de Señal", description = "¡Estática en la red! Durante esta Fase de Mercado, todos los precios de venta se reducen a la mitad."),
     GlitchEvent(name = "Fallo de Suministro", description = "El coste de plantado de todos los cultivos aumenta permanentemente en 1 Moneda."),
     GlitchEvent(name = "Impuesto Sorpresa", description = "Todos los jugadores con 10 o más monedas deben pagar un impuesto de 3 monedas."),
-    GlitchEvent(name = "Fiebre del Oro", description = "El precio del Maíz y la Patata aumenta en +2 durante esta Fase de Mercado."),
+    GlitchEvent(name = "Fiebre del Oro", description = "El precio del Trigo y la Patata aumenta en +2 durante esta Fase de Mercado."),
     GlitchEvent(name = "Bonus del Sindicato", description = "Todos los jugadores ganan 2 monedas."),
     GlitchEvent(name = "Fuga de Energía", description = "Todos los jugadores pierden 1 Energía Glitch. Si no puedes, pierdes 2 monedas."),
 )
@@ -229,21 +230,42 @@ val allMysteryEncounters = listOf<MysteryEncounter>(
 
 val allCrops = listOf(
     CultivoNormal(id = "zanahoria", nombre = "Zanahoria", costePlantado = 2, crecimientoRequerido = 3, valorVentaBase = 3, pvFinalJuego = 2),
-    CultivoNormal(id = "maiz", nombre = "Maíz Común", costePlantado = 3, crecimientoRequerido = 4, valorVentaBase = 4, pvFinalJuego = 3),
+    CultivoNormal(id = "trigo", nombre = "Trigo Común", costePlantado = 3, crecimientoRequerido = 4, valorVentaBase = 4, pvFinalJuego = 3),
     CultivoNormal(id = "patata", nombre = "Patata Terrosa", costePlantado = 1, crecimientoRequerido = 4, valorVentaBase = 3, pvFinalJuego = 2),
     CultivoMutado(id = "tomateCubico", nombre = "Tomate Cúbico", costePlantado = 4, crecimientoRequerido = 4, valorVentaBase = 6, pvFinalJuego = 5, efecto = "Al plantar, puedes descartar 1 token de Zanahoria para colocar 2 ➕ adicionales."),
-    CultivoMutado(id = "maizArcoiris", nombre = "Maíz Arcoíris", costePlantado = 5, crecimientoRequerido = 5, valorVentaBase = 7, pvFinalJuego = 6, efecto = "Al vender, puedes descartar 1 token de Maíz para ganar 3 💰 adicionales."),
+    CultivoMutado(id = "maizArcoiris", nombre = "Maíz Arcoíris", costePlantado = 5, crecimientoRequerido = 5, valorVentaBase = 7, pvFinalJuego = 6, efecto = "Al vender, puedes descartar 1 token de Trigo para ganar 3 💰 adicionales."),
     CultivoMutado(id = "brocoliCristal", nombre = "Brócoli Cristal", costePlantado = 4, crecimientoRequerido = 4, valorVentaBase = 6, pvFinalJuego = 5, efecto = "Al cosechar, puedes descartar 1 token de Patata para cambiar el resultado de un dado."),
-    CultivoMutado(id = "pimientoExplosivo", nombre = "Pimiento Explosivo", costePlantado = 6, crecimientoRequerido = 6, valorVentaBase = 8, pvFinalJuego = 7, efecto = "Al vender, puedes descartar 1 token de Zanahoria y 1 de Maíz para ganar 2 💰 adicionales.")
+    CultivoMutado(id = "pimientoExplosivo", nombre = "Pimiento Explosivo", costePlantado = 6, crecimientoRequerido = 6, valorVentaBase = 8, pvFinalJuego = 7, efecto = "Al vender, puedes descartar 1 token de Zanahoria y 1 de Trigo para ganar 2 💰 adicionales.")
 )
 
-val allObjectives = listOf(
-    Objective(id = "obj_money_15", description = "Acumula 15 Monedas en tu reserva.", rewardPV = 3, type = "money", targetValue = 15),
-    Objective(id = "obj_money_25", description = "Acumula 25 Monedas en tu reserva.", rewardPV = 5, type = "money", targetValue = 25),
-    Objective(id = "obj_total_harvest_5", description = "Cosecha un total de 5 cultivos.", rewardPV = 2, type = "total_harvest", targetValue = 5),
-    Objective(id = "obj_specific_zanahoria_3", description = "Cosecha 3 Zanahorias.", rewardPV = 3, type = "specific_harvest", targetValue = 3, targetCropId = "zanahoria"),
-    Objective(id = "obj_dice_all_same", description = "Saca los 4 dados con el mismo símbolo.", rewardPV = 8, type = "dice_roll_all_same", targetValue = 1)
+val allGameObjectives = listOf(
+    Objective(id = "obj_game_money_15", description = "Acumula 15 Monedas en tu reserva.", reward = MysteryOutcome("¡Objetivo de Monedas completado! Ganas 3 monedas.", moneyChange = 3), type = "money", targetValue = 15),
+    Objective(id = "obj_game_money_25", description = "Acumula 25 Monedas en tu reserva.", reward = MysteryOutcome("¡Objetivo de Monedas completado! Ganas 5 monedas.", moneyChange = 5), type = "money", targetValue = 25),
+    Objective(id = "obj_game_total_harvest_5", description = "Cosecha un total de 5 cultivos.", reward = MysteryOutcome("¡Objetivo de Cosecha Total completado! Ganas 1 Energía.", energyChange = 1), type = "total_harvest", targetValue = 5),
+    Objective(id = "obj_game_total_harvest_10", description = "Cosecha un total de 10 cultivos.", reward = MysteryOutcome("¡Objetivo de Cosecha Total completado! Ganas 2 Energías.", energyChange = 2), type = "total_harvest", targetValue = 10),
+    Objective(id = "obj_game_specific_zanahoria_3", description = "Cosecha 3 Zanahorias.", reward = MysteryOutcome("¡Objetivo de Cosecha de Zanahorias completado! Ganas 1 Energía y 2 monedas.", moneyChange = 2, energyChange = 1), type = "specific_harvest", targetValue = 3, targetCropId = "zanahoria"),
+    Objective(id = "obj_game_specific_trigo_4", description = "Cosecha 4 Trigo Común.", reward = MysteryOutcome("¡Objetivo de Cosecha de Trigo Común completado! Ganas 3 monedas.", moneyChange = 3), type = "specific_harvest", targetValue = 4, targetCropId = "trigo"),
+    Objective(id = "obj_game_mutant_harvest_1", description = "Cosecha 1 Cultivo Mutante.", reward = MysteryOutcome("¡Objetivo de Cosecha Mutante completado! Ganas 1 Energía.", energyChange = 1), type = "mutant_harvest", targetValue = 1),
+    Objective(id = "obj_game_mutant_harvest_3", description = "Cosecha 3 Cultivos Mutantes.", reward = MysteryOutcome("¡Objetivo de Cosecha Mutante completado! Ganas 2 energías.", energyChange = 2), type = "mutant_harvest", targetValue = 3),
+    Objective(id = "obj_game_dice_all_same", description = "Saca los 4 dados con el mismo símbolo.", reward = MysteryOutcome("¡Objetivo de Tirada Perfecta completado! Ganas 2 Energías.", energyChange = 2), type = "dice_roll_all_same", targetValue = 1),
+    Objective(id = "obj_game_energy_5", description = "Acumula 5 Energías Glitch en tu reserva.", reward = MysteryOutcome("¡Objetivo de Energía completado! Ganas 2 monedas.", moneyChange = 2), type = "energy_count", targetValue = 5)
 )
+
+val allRoundObjectives = listOf(
+    Objective(id = "obj_round_plant_2", description = "Planta 2 cultivos esta ronda.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 1 moneda.", moneyChange = 1), type = "plant_count", targetValue = 2, isRoundObjective = true),
+    Objective(id = "obj_round_plant_3", description = "Planta 3 cultivos esta ronda.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 2 monedas.", moneyChange = 2), type = "plant_count", targetValue = 3, isRoundObjective = true),
+    Objective(id = "obj_round_sell_1", description = "Vende 1 cultivo esta ronda.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 1 energía.", energyChange = 1), type = "sell_count", targetValue = 1, isRoundObjective = true),
+    Objective(id = "obj_round_sell_2", description = "Vende 2 cultivos esta ronda.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 1 energía y 1 moneda.", moneyChange = 1, energyChange = 1), type = "sell_count", targetValue = 2, isRoundObjective = true),
+    Objective(id = "obj_round_sell_mutant", description = "Vende 1 Cultivo Mutante esta ronda.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 2 monedas y 1 energía.", moneyChange = 2, energyChange = 1), type = "sell_mutant_count", targetValue = 1, isRoundObjective = true),
+    Objective(id = "obj_round_roll_energy", description = "Saca un dado de Energía (⚡).", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 2 monedas.", moneyChange = 2), type = "roll_specific_dice", targetValue = 1, targetCropId = "ENERGIA", isRoundObjective = true),
+    Objective(id = "obj_round_roll_plantar", description = "Saca un dado de Plantar (🌱).", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 1 moneda.", moneyChange = 1), type = "roll_specific_dice", targetValue = 1, targetCropId = "PLANTAR", isRoundObjective = true),
+    Objective(id = "obj_round_roll_glitch", description = "Saca un dado de Glitch (🌀).", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 1 energía.", energyChange = 1), type = "roll_specific_dice", targetValue = 1, targetCropId = "GLITCH", isRoundObjective = true),
+    Objective(id = "obj_round_money_gain_3", description = "Aumenta tus monedas en 3 o más esta ronda.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 1 energía.", energyChange = 1), type = "money_gain", targetValue = 3, isRoundObjective = true),
+    Objective(id = "obj_round_money_gain_5", description = "Aumenta tus monedas en 5 o más esta ronda.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 2 energías.", energyChange = 2), type = "money_gain", targetValue = 5, isRoundObjective = true),
+    Objective(id = "obj_round_dice_2_same", description = "Saca 2 dados con el mismo símbolo.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 1 moneda.", moneyChange = 1), type = "roll_same_dice", targetValue = 2, isRoundObjective = true),
+    Objective(id = "obj_round_dice_3_same", description = "Saca 3 dados con el mismo símbolo.", reward = MysteryOutcome("Objetivo de Ronda completado. Ganas 2 monedas.", moneyChange = 2), type = "roll_same_dice", targetValue = 3, isRoundObjective = true),
+)
+
 
 val allGranjeros = listOf(
     Granjero(id = "ingeniero_glitch", nombre = "El Ingeniero Glitch", habilidadPasiva = "Una vez por turno, puedes volver a tirar uno de tus dados sin coste.", habilidadActivable = "Elige uno de tus dados. Puedes cambiar su resultado a la cara que elijas.", costeActivacion = "1 ⚡", iconName = "engineering"),
@@ -255,7 +277,7 @@ val allGranjeros = listOf(
 fun getCropMarketKey(cropName: String): String {
     return when (cropName) {
         "Zanahoria" -> "zanahoria"
-        "Maíz Común" -> "maiz"
+        "Trigo Común" -> "trigo"
         "Patata Terrosa" -> "patata"
         "Tomate Cúbico" -> "tomateCubico"
         "Maíz Arcoíris" -> "maizArcoiris"
@@ -264,4 +286,3 @@ fun getCropMarketKey(cropName: String): String {
         else -> ""
     }
 }
-

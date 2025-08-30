@@ -94,10 +94,6 @@ fun LobbyScreen(
 
     // Estado local para el orden de los jugadores en el lobby.
     val playerList = remember { mutableStateListOf<Player>() }
-    var draggingItemIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffset by remember { mutableStateOf(Offset.Zero) }
-    var currentDragPlayerId by remember { mutableStateOf<String?>(null) }
-
 
     // Sincronizar la lista local con los datos de Firestore.
     LaunchedEffect(allPlayers) {
@@ -204,9 +200,9 @@ fun LobbyScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Lista de jugadores con arrastrar y soltar si es el anfitrión.
-            if (playerList.isNotEmpty()) {
+            if (allPlayers.isNotEmpty()) {
                 Text(
-                    text = "Jugadores (${playerList.size}/4)",
+                    text = "Jugadores (${allPlayers.size}/4)",
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
@@ -251,6 +247,7 @@ fun LobbyScreen(
 // ========================================================================
 // --- Funciones para la Reordenación Nativa ---
 // ========================================================================
+
 fun <T> MutableList<T>.move(fromIndex: Int, toIndex: Int) {
     if (fromIndex == toIndex) return
     val element = this.removeAt(fromIndex)
@@ -261,13 +258,14 @@ fun <T> MutableList<T>.move(fromIndex: Int, toIndex: Int) {
 @Composable
 fun ReorderablePlayerList(
     playerList: MutableList<Player>,
-    onMove: (Int, Int) -> Unit,
+    onMove: (fromIndex: Int, toIndex: Int) -> Unit,
     hostPlayerId: String?
 ) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
-    var draggingItemIndex by remember { mutableStateOf<Int?>(null) }
+    var draggingItem by remember { mutableStateOf<Player?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var displacedIndex by remember { mutableStateOf(-1) }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().height(300.dp),
@@ -275,15 +273,14 @@ fun ReorderablePlayerList(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         itemsIndexed(playerList, key = { _, player -> player.id }) { index, player ->
-            val isDragging = index == draggingItemIndex
+            val isDragging = player == draggingItem
             val zIndex = if (isDragging) 1f else 0f
             val alpha = if (isDragging) 0.5f else 1f
             val elevation = if (isDragging) 8.dp else 2.dp
 
             val itemHeight = with(density) { 56.dp.toPx() }
-            val displacement = (dragOffset.y / itemHeight).roundToInt()
 
-            PlayerCardInLobby(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .animateItemPlacement()
@@ -294,36 +291,52 @@ fun ReorderablePlayerList(
                         this.alpha = alpha
                     }
                     .zIndex(zIndex)
-                    .pointerInput(player) {
-                        if (hostPlayerId == player.id) return@pointerInput // El anfitrión no se puede mover.
+                    .pointerInput(player.id) { // CLAVE: Usamos el ID del jugador como clave
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
-                                draggingItemIndex = index
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (player.id != hostPlayerId) {
+                                    draggingItem = player
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
                             },
-                            onDrag = { _, offset ->
+                            onDrag = { change, offset ->
                                 dragOffset += offset
-                                val newIndex = (index + displacement).coerceIn(0, playerList.lastIndex)
-                                if (newIndex != index) {
-                                    onMove(index, newIndex)
-                                    draggingItemIndex = newIndex
+                                change.consume()
+                                draggingItem?.let {
+                                    val newDisplacedIndex = (index + (dragOffset.y / itemHeight).roundToInt())
+                                        .coerceIn(0, playerList.lastIndex)
+                                    if (newDisplacedIndex != displacedIndex) {
+                                        displacedIndex = newDisplacedIndex
+                                    }
                                 }
                             },
                             onDragEnd = {
-                                draggingItemIndex = null
+                                if (draggingItem != null) {
+                                    val finalIndex = (index + (dragOffset.y / itemHeight).roundToInt())
+                                        .coerceIn(0, playerList.lastIndex)
+                                    if (finalIndex != index) {
+                                        onMove(index, finalIndex)
+                                    }
+                                }
+                                draggingItem = null
                                 dragOffset = Offset.Zero
+                                displacedIndex = -1
                             },
                             onDragCancel = {
-                                draggingItemIndex = null
+                                draggingItem = null
                                 dragOffset = Offset.Zero
+                                displacedIndex = -1
                             }
                         )
-                    },
-                player = player,
-                rank = index + 1,
-                hostPlayerId = hostPlayerId,
-                elevation = elevation
-            )
+                    }
+            ) {
+                PlayerCardInLobby(
+                    player = player,
+                    rank = playerList.indexOf(player) + 1,
+                    hostPlayerId = hostPlayerId,
+                    elevation = elevation
+                )
+            }
         }
     }
 }

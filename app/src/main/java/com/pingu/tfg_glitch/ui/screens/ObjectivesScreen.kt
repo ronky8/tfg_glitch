@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import com.pingu.tfg_glitch.data.FirestoreService
 import com.pingu.tfg_glitch.data.GameService
 import com.pingu.tfg_glitch.data.Objective
-import com.pingu.tfg_glitch.data.allObjectives
 import com.pingu.tfg_glitch.ui.components.PlayerInfoCard
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
 import kotlinx.coroutines.launch
@@ -63,6 +62,7 @@ fun ObjectivesScreen(gameId: String, currentPlayerId: String) {
     // --- Estados ---
     val game by gameService.getGame(gameId).collectAsState(initial = null)
     val currentPlayer by firestoreService.getPlayer(currentPlayerId).collectAsState(initial = null)
+    val allPlayers by firestoreService.getPlayersInGame(gameId).collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -100,26 +100,68 @@ fun ObjectivesScreen(gameId: String, currentPlayerId: String) {
                         PlayerInfoCard(player = currentPlayer!!)
                     }
 
-                    if (game!!.activeObjectives.isEmpty()) {
+                    // Seccion de objetivos de ronda
+                    if (game!!.roundObjective != null) {
                         item {
                             Text(
-                                text = "No hay objetivos activos en esta partida.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                text = "Objetivo de Ronda",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.tertiary
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val isClaimed = game!!.claimedObjectivesByPlayer.containsKey(game!!.roundObjective!!.id)
+                            val claimedByPlayer = game!!.claimedObjectivesByPlayer[game!!.roundObjective!!.id]?.let { playerId ->
+                                allPlayers.find { it.id == playerId }
+                            }
+                            ObjectiveCard(
+                                objective = game!!.roundObjective!!,
+                                isClaimed = isClaimed,
+                                claimedByPlayerName = claimedByPlayer?.name,
+                                onClaim = {
+                                    coroutineScope.launch {
+                                        val result = gameService.claimObjective(gameId, currentPlayerId, game!!.roundObjective!!.id)
+                                        snackbarHostState.showSnackbar(result)
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
-                    } else {
+                    }
+
+                    // Seccion de objetivos de partida
+                    if (game!!.activeObjectives.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "Objetivos de Partida Permanentes",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                         items(game!!.activeObjectives, key = { it.id }) { objective ->
-                            val isClaimed = currentPlayer!!.objectivesClaimed.contains(objective.id)
+                            val isClaimed = game!!.claimedObjectivesByPlayer.containsKey(objective.id)
+                            val claimedByPlayer = game!!.claimedObjectivesByPlayer[objective.id]?.let { playerId ->
+                                allPlayers.find { it.id == playerId }
+                            }
                             ObjectiveCard(
                                 objective = objective,
                                 isClaimed = isClaimed,
+                                claimedByPlayerName = claimedByPlayer?.name,
                                 onClaim = {
                                     coroutineScope.launch {
                                         val result = gameService.claimObjective(gameId, currentPlayerId, objective.id)
                                         snackbarHostState.showSnackbar(result)
                                     }
                                 }
+                            )
+                        }
+                    } else {
+                        item {
+                            Text(
+                                text = "No hay objetivos activos en esta partida.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                         }
                     }
@@ -141,6 +183,7 @@ fun ObjectivesScreen(gameId: String, currentPlayerId: String) {
 private fun ObjectiveCard(
     objective: Objective,
     isClaimed: Boolean,
+    claimedByPlayerName: String? = null,
     onClaim: () -> Unit
 ) {
     val cardColors = if (isClaimed) {
@@ -148,6 +191,8 @@ private fun ObjectiveCard(
     } else {
         CardDefaults.elevatedCardColors()
     }
+
+    val currentClaimedByPlayerName = remember(claimedByPlayerName) { claimedByPlayerName }
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -167,12 +212,12 @@ private fun ObjectiveCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.WorkspacePremium,
-                    contentDescription = "Puntos de Victoria",
+                    contentDescription = "Recompensa",
                     tint = MaterialTheme.colorScheme.tertiary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "${objective.rewardPV} PV",
+                    text = "${objective.reward.moneyChange}💰 / ${objective.reward.energyChange}⚡",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.tertiary
@@ -188,7 +233,7 @@ private fun ObjectiveCard(
                 ) {
                     Icon(Icons.Default.CheckCircle, contentDescription = "Reclamado")
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("¡Objetivo Reclamado!", fontWeight = FontWeight.Bold)
+                    Text("¡Objetivo Reclamado por ${currentClaimedByPlayerName ?: "otro jugador"}!", fontWeight = FontWeight.Bold)
                 }
             } else {
                 Button(

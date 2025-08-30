@@ -131,15 +131,16 @@ fun CreateGameScreen(
                     }
                 } else {
                     // Estado final: mostrar código de partida
-                    // (código sin cambios)
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         Text(
                             text = "Comparte el código",
                             style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(bottom = 24.dp)
+                            modifier = Modifier.padding(bottom = 24.dp),
+                            textAlign = TextAlign.Center
                         )
 
                         generatedGameCode?.let { code ->
@@ -149,7 +150,9 @@ fun CreateGameScreen(
                                 shape = RoundedCornerShape(16.dp)
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(24.dp),
+                                    modifier = Modifier
+                                        .padding(24.dp)
+                                        .fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(

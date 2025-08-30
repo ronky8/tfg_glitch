@@ -21,7 +21,8 @@ data class Game(
     val playersFinishedTurn: MutableList<String> = mutableListOf(), // Jugadores que han terminado su fase de acciones
     val playersFinishedMarket: MutableList<String> = mutableListOf(), // Jugadores que han terminado su fase de mercado
     val activeObjectives: MutableList<Objective> = mutableListOf(), // Objetivos activos en esta partida
-    val claimedObjectivesByPlayer: MutableMap<String, MutableList<String>> = mutableMapOf(), // Mapa de PlayerId a lista de Objective IDs reclamados
+    val claimedObjectivesByPlayer: MutableMap<String, String> = mutableMapOf(), // CORREGIDO: Ahora almacena el ID del jugador que lo reclamó
     var playerOrder: MutableList<String> = mutableListOf(), // [¡NUEVO!] Orden de los jugadores
-    var roundNumber: Int = 0
+    var roundNumber: Int = 0,
+    var roundObjective: Objective? = null // ¡CORREGIDO! Nuevo objetivo de ronda rotatorio.
 )
