@@ -1,11 +1,10 @@
 package com.pingu.tfg_glitch.data
 
 import java.util.UUID
-import kotlin.math.max // Necesario para cálculos de precios de mercado
-import android.util.Log // Solo para depuración en getCropMarketKey si es necesario
+import kotlin.math.max
+import android.util.Log
 
 // --- Enums y Clases de Datos del Juego ---
-
 enum class DadoSimbolo { GLITCH, CRECIMIENTO, ENERGIA, MONEDA, MISTERIO, PLANTAR }
 enum class TipoCultivo { NORMAL, MUTADO }
 
@@ -43,11 +42,12 @@ data class CultivoMutado(
 }
 
 data class Granjero(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = "",
     val nombre: String = "",
     val habilidadPasiva: String = "",
     val habilidadActivable: String = "",
-    val costeActivacion: String = ""
+    val costeActivacion: String = "",
+    val iconName: String = "help_outline" // Usaremos esto para asociar un icono
 )
 
 data class MejoraGlitch(
@@ -82,7 +82,6 @@ data class CultivoInventario(
 )
 
 // --- Estructuras para la Mecánica de Misterio ---
-
 data class MysteryOutcome(
     val description: String = "",
     val moneyChange: Int = 0,
@@ -133,23 +132,21 @@ data class MinigameEncounter(
 
 
 // --- Jugador y Estado de la partida ---
-
 data class Player(
     val id: String = "",
     val gameId: String = "",
     var name: String = "Nuevo Jugador",
-    var farmerType: String = "Ingeniero Glitch",
-    var money: Int = 10,
-    var glitchEnergy: Int = 0,
+    var money: Int = 5,
+    var glitchEnergy: Int = 1,
+    var granjero: Granjero? = null, // Granjero asignado
     val mano: MutableList<CartaSemilla> = mutableListOf(),
     val parcela: MutableList<CultivoPlantado> = mutableListOf(),
     val inventario: MutableList<CultivoInventario> = mutableListOf(),
     var currentDiceRoll: List<DadoSimbolo> = emptyList(),
     var rollPhase: Int = 0,
-    var hasUsedStandardReroll: Boolean = false,
-    var hasUsedFreeReroll: Boolean = false,
-    var hasUsedActiveSkill: Boolean = false,
-    var privateSaleBonus: Int = 0, // NUEVO: Para la habilidad del Comerciante
+    var hasRerolled: Boolean = false,
+    var haUsadoPasivaIngeniero: Boolean = false, // Para la pasiva del Ingeniero
+    var haUsadoHabilidadActiva: Boolean = false, // ¡NUEVO! Para controlar la habilidad activa
     var mysteryButtonsRemaining: Int = 0,
     val objectivesClaimed: MutableList<String> = mutableListOf(),
     var totalScore: Int = 0,
@@ -159,10 +156,10 @@ data class Player(
 )
 
 data class MarketPrices(
-    val trigo: Int = 0,
+    val zanahoria: Int = 0,
     val maiz: Int = 0,
     val patata: Int = 0,
-    val tomateCuadrado: Int = 0,
+    val tomateCubico: Int = 0,
     val maizArcoiris: Int = 0,
     val brocoliCristal: Int = 0,
     val pimientoExplosivo: Int = 0,
@@ -179,77 +176,36 @@ data class Objective(
 
 
 // --- Constantes y Datos Iniciales ---
-
 val initialMarketPrices = MarketPrices(
-    trigo = 3, maiz = 4, patata = 3, tomateCuadrado = 6,
-    maizArcoiris = 7, brocoliCristal = 6, pimientoExplosivo = 8
+    zanahoria = 3,
+    maiz = 4,
+    patata = 3,
+    tomateCubico = 6,
+    maizArcoiris = 7,
+    brocoliCristal = 6,
+    pimientoExplosivo = 8
 )
 
 val eventosGlitch = listOf(
     GlitchEvent(name = "Aumento de Demanda", description = "El precio de todos los Cultivos Normales aumenta en +1 solo para esta Fase de Mercado."),
     GlitchEvent(name = "Cosecha Mutante Exitosa", description = "El precio de todos los Cultivos Mutados aumenta en +1 solo para esta Fase de Mercado."),
-    GlitchEvent(name = "Interferencia de Señal", description = "¡Estática en la red! Durante esta Fase de Mercado, todos los precios de venta se reducen a la mitad. El mercado volverá a la normalidad en la siguiente ronda."),
-    GlitchEvent(name = "Fallo de Suministro", description = "El coste de plantado de todos los cultivos aumenta permanentemente en 1 Moneda. (Este efecto solo puede ocurrir una vez por partida)."),
-    GlitchEvent(name = "Impuesto Sorpresa", description = "Todos los jugadores con 10 o más monedas deben pagar un impuesto de 3 monedas a la reserva."),
+    GlitchEvent(name = "Interferencia de Señal", description = "¡Estática en la red! Durante esta Fase de Mercado, todos los precios de venta se reducen a la mitad."),
+    GlitchEvent(name = "Fallo de Suministro", description = "El coste de plantado de todos los cultivos aumenta permanentemente en 1 Moneda."),
+    GlitchEvent(name = "Impuesto Sorpresa", description = "Todos los jugadores con 10 o más monedas deben pagar un impuesto de 3 monedas."),
     GlitchEvent(name = "Fiebre del Oro", description = "El precio del Maíz y la Patata aumenta en +2 durante esta Fase de Mercado."),
     GlitchEvent(name = "Bonus del Sindicato", description = "Todos los jugadores ganan 2 monedas."),
     GlitchEvent(name = "Fuga de Energía", description = "Todos los jugadores pierden 1 Energía Glitch. Si no puedes, pierdes 2 monedas."),
-    GlitchEvent(name = "Tesoro Enterrado", description = "¡Suerte inesperada! El jugador inicial de esta ronda gana 4 monedas."),
-    GlitchEvent(name = "Inversión Fallida", description = "El jugador con más monedas pierde 3 monedas."),
-    GlitchEvent(name = "Sobrecarga de Energía", description = "Todos los jugadores ganan 1 Token de Energía Glitch."),
-    GlitchEvent(name = "Crecimiento Acelerado", description = "Todos los jugadores añaden 1 Marcador de Crecimiento a uno de sus cultivos plantados."),
-    GlitchEvent(name = "Plaga Leve", description = "Todos los jugadores deben retirar 1 Marcador de Crecimiento de uno de sus cultivos plantados."),
-    GlitchEvent(name = "Intercambio Forzoso", description = "Todos los jugadores pasan una carta de su mano al jugador de su izquierda."),
-    GlitchEvent(name = "Semillas Misteriosas", description = "Todos los jugadores roban 1 carta del mazo de Semilla Corrupta."),
-    GlitchEvent(name = "Mala Cosecha", description = "Una plaga inesperada ataca el cultivo más avanzado. El jugador inicial de la ronda retira 2 Marcadores de Crecimiento de su cultivo plantado que más tenga."),
-    GlitchEvent(name = "Fallo de Riego", description = "Todos los jugadores deben elegir 1 de sus cultivos plantados y retirar 1 Marcador de Crecimiento de él."),
-    GlitchEvent(name = "Invasión de Bichos Píxel", description = "Cada jugador debe descartar 1 Carta de Semilla Corrupta de su mano. Si no tiene cartas, pierde 2 Monedas."),
-    GlitchEvent(name = "Lluvia de Meteoritos Pixelados", description = "¡Peligro! Cada jugador tira un dado físico. Si sacas un 🌀 (Glitch), uno de tus cultivos plantados (elegido al azar) pierde todos sus marcadores de crecimiento."),
-    GlitchEvent(name = "Inspiración Súbita", description = "¡Momento de lucidez! En la próxima fase de acciones, cada jugador puede elegir el resultado de uno de sus dados (excepto Misterio)."),
-    GlitchEvent(name = "Plantación Gratuita", description = "El primer cultivo que plante cada jugador esta ronda tiene un coste de 0 monedas."),
-    GlitchEvent(name = "Silencio de Radio", description = "Las habilidades activables de los Granjeros no se pueden usar esta ronda."),
-    GlitchEvent(name = "El Dilema del Granjero", description = "El jugador inicial de la ronda se enfrenta a una decisión difícil: Perder 3 monedas o descartar 2 cartas de su mano."),
-    GlitchEvent(name = "Ayuda Inesperada", description = "El jugador inicial de la ronda elige a otro jugador. Ambos ganáis 1 Energía Glitch."),
-    GlitchEvent(name = "Sabotaje", description = "El jugador inicial de la ronda elige a un oponente. Ese oponente debe retirar 2 Marcadores de Crecimiento de uno de sus cultivos."),
-    GlitchEvent(name = "Datos Corruptos", description = "¡Oh no! Todos los jugadores deben mostrar su mano. El jugador con más cartas debe descartar una al azar.")
 )
 
 val allMysteryEncounters = listOf<MysteryEncounter>(
     DecisionEncounter(
         id = "decision_dron",
         title = "Dron de Contrabando",
-        description = "Encuentras un dron de reparto estrellado, aún humeante. Dentro, un paquete inestable emite un zumbido. ¿Qué haces?",
+        description = "Encuentras un dron de reparto estrellado. Dentro, un paquete inestable emite un zumbido. ¿Qué haces?",
         choices = listOf(
-            MysteryChoice("choice_abrir", "Intentar abrirlo", MysteryOutcome("¡Riesgo calculado! El paquete explota en una nube de purpurina y monedas. Ganas 4 monedas.", moneyChange = 4)),
-            MysteryChoice("choice_ignorar", "Ignorarlo (demasiado arriesgado)", MysteryOutcome("Decides no tentar a la suerte. No pasa nada, pero sientes que has perdido una oportunidad.", moneyChange = 0)),
-            MysteryChoice("choice_analizar", "Usar 1 Energía para analizarlo", MysteryOutcome("Tu escáner revela que es seguro. Dentro encuentras un prototipo de batería. Pierdes 1 Energía pero ganas 3.", energyChange = 2))
-        )
-    ),
-    DecisionEncounter(
-        id = "decision_mercader",
-        title = "Mercader Misterioso",
-        description = "Una figura encapuchada aparece entre tus cultivos y te ofrece un trato: 'Te doy 2 Energías Glitch ahora mismo... por solo 5 de tus monedas'.",
-        choices = listOf(
-            MysteryChoice("choice_aceptar", "Aceptar el trato (pagar 5 monedas)", MysteryOutcome("Haces el intercambio. Te sientes un poco estafado, pero la energía es tuya. Pierdes 5 monedas y ganas 2 Energías.", moneyChange = -5, energyChange = 2)),
-            MysteryChoice("choice_rechazar", "Rechazar la oferta", MysteryOutcome("El mercader se encoge de hombros y desaparece entre las sombras. No ganas ni pierdes nada.", moneyChange = 0))
-        )
-    ),
-    DecisionEncounter(
-        id = "decision_cable",
-        title = "Cable de Datos Expuesto",
-        description = "Ves un cable de datos grueso y chispeante saliendo de la tierra. Podrías conectarlo a tu sistema para un impulso, pero parece inestable.",
-        choices = listOf(
-            MysteryChoice("choice_conectar", "Conectarlo", MysteryOutcome("¡Sobrecarga! El sistema se reinicia bruscamente. Pierdes 2 monedas.", moneyChange = -2)),
-            MysteryChoice("choice_cortar", "Cortarlo por seguridad", MysteryOutcome("Recuperas el cobre del cable y lo vendes como chatarra. Ganas 2 monedas.", moneyChange = 2))
-        )
-    ),
-    DecisionEncounter(
-        id = "decision_codigo",
-        title = "Fragmento de Código",
-        description = "Encuentras una vieja tarjeta de memoria con un fragmento de código. Podrías ejecutarlo en tu sistema o venderlo en el mercado negro.",
-        choices = listOf(
-            MysteryChoice("choice_ejecutar", "Ejecutar el código (cuesta 1 Energía)", MysteryOutcome("El código optimiza tus sistemas de riego. Todos tus cultivos plantados ganan 1 marcador de crecimiento.", energyChange = -1)),
-            MysteryChoice("choice_vender", "Vender el fragmento", MysteryOutcome("Un contacto anónimo te paga bien por la tarjeta. Ganas 3 monedas.", moneyChange = 3))
+            MysteryChoice("choice_abrir", "Intentar abrirlo", MysteryOutcome("¡Riesgo calculado! Ganas 4 monedas.", moneyChange = 4)),
+            MysteryChoice("choice_ignorar", "Ignorarlo", MysteryOutcome("Decides no tentar a la suerte. No pasa nada.", moneyChange = 0)),
+            MysteryChoice("choice_analizar", "Usar 1 Energía para analizarlo", MysteryOutcome("Es seguro. Dentro encuentras un prototipo de batería. Pierdes 1 Energía pero ganas 3.", energyChange = 2))
         )
     ),
     RandomEventEncounter(
@@ -257,36 +213,8 @@ val allMysteryEncounters = listOf<MysteryEncounter>(
         title = "Lluvia de Datos",
         description = "Una extraña lluvia de datos cósmicos baña tu granja. Las plantas reaccionan de forma extraña...",
         outcomes = listOf(
-            Pair(MysteryOutcome("¡La lluvia ha sido beneficiosa! Tus sistemas se optimizan. Ganas 2 monedas.", moneyChange = 2), 70),
+            Pair(MysteryOutcome("¡La lluvia ha sido beneficiosa! Ganas 2 monedas.", moneyChange = 2), 70),
             Pair(MysteryOutcome("La estática ha sobrecargado tus sistemas. Pierdes 1 Energía.", energyChange = -1), 30)
-        )
-    ),
-    RandomEventEncounter(
-        id = "random_animal_glitch",
-        title = "Animal Glitcheado",
-        description = "Una ardilla pixelada corretea por tu granja, dejando un rastro de datos corruptos antes de desaparecer en un muro.",
-        outcomes = listOf(
-            Pair(MysteryOutcome("La ardilla ha desenterrado algo brillante. ¡Encuentras 3 monedas!", moneyChange = 3), 50),
-            Pair(MysteryOutcome("La ardilla mordisqueó un cable de energía. Pierdes 1 Energía.", energyChange = -1), 40),
-            Pair(MysteryOutcome("La ardilla simplemente te mira fijamente y se desvanece. Te quedas... perplejo.", moneyChange = 0), 10)
-        )
-    ),
-    RandomEventEncounter(
-        id = "random_eco_futuro",
-        title = "Eco del Futuro",
-        description = "Tu radio capta una extraña transmisión. Parece un informe de mercado... ¡del día de mañana!",
-        outcomes = listOf(
-            Pair(MysteryOutcome("La información era correcta y te has anticipado al mercado. Ganas 3 monedas.", moneyChange = 3), 60),
-            Pair(MysteryOutcome("El eco era falso y te ha distraído de tus tareas. No pasa nada.", moneyChange = 0), 40)
-        )
-    ),
-    RandomEventEncounter(
-        id = "random_fantasma",
-        title = "Fantasma en la Máquina",
-        description = "Las luces de tu granero parpadean y escuchas un susurro digital. ¿Es un error... o algo más?",
-        outcomes = listOf(
-            Pair(MysteryOutcome("Era un diagnóstico oculto del sistema. Ganas 1 Energía.", energyChange = 1), 50),
-            Pair(MysteryOutcome("Era un simple cortocircuito. Pierdes 1 moneda para repararlo.", moneyChange = -1), 50)
         )
     ),
     MinigameEncounter(
@@ -294,43 +222,46 @@ val allMysteryEncounters = listOf<MysteryEncounter>(
         title = "¡Brecha en el Cortafuegos!",
         description = "¡Alerta! Una conexión no autorizada intenta acceder a tus sistemas. ¡Estabiliza el núcleo de energía para bloquear la intrusión!",
         minigameType = "reaction_time",
-        successOutcome = MysteryOutcome("¡Bloqueo exitoso! Has reforzado tu seguridad y optimizado los sistemas. Ganas 1 Energía y 3 monedas.", energyChange = 1, moneyChange = 3),
-        failureOutcome = MysteryOutcome("La brecha ha sido parcial. El intruso ha robado algunos datos de mercado. Pierdes 2 monedas.", moneyChange = -2)
+        successOutcome = MysteryOutcome("¡Bloqueo exitoso! Ganas 1 Energía y 3 monedas.", energyChange = 1, moneyChange = 3),
+        failureOutcome = MysteryOutcome("La brecha ha sido parcial. Pierdes 2 monedas.", moneyChange = -2)
     )
 )
 
 val allCrops = listOf(
-    CultivoNormal(id = "trigo", nombre = "Trigo", costePlantado = 2, crecimientoRequerido = 3, valorVentaBase = 3, pvFinalJuego = 2),
-    CultivoNormal(id = "maiz", nombre = "Maíz", costePlantado = 2, crecimientoRequerido = 3, valorVentaBase = 4, pvFinalJuego = 3),
-    CultivoNormal(id = "patata", nombre = "Patata", costePlantado = 3, crecimientoRequerido = 4, valorVentaBase = 3, pvFinalJuego = 2),
-    CultivoMutado(id = "tomate_cuadrado", nombre = "Tomate Cuadrado", costePlantado = 4, crecimientoRequerido = 5, valorVentaBase = 6, pvFinalJuego = 5, efecto = "Gana 1 energía Glitch al cosechar."),
-    CultivoMutado(id = "maiz_arcoiris", nombre = "Maíz Arcoíris", costePlantado = 5, crecimientoRequerido = 6, valorVentaBase = 7, pvFinalJuego = 6, efecto = "Roba 1 carta de mejora Glitch al cosechar."),
-    CultivoMutado(id = "brocoli_cristal", nombre = "Brócoli Cristal", costePlantado = 4, crecimientoRequerido = 5, valorVentaBase = 6, pvFinalJuego = 5, efecto = "Puedes venderlo por +2 monedas en el mercado."),
-    CultivoMutado(id = "pimiento_explosivo", nombre = "Pimiento Explosivo", costePlantado = 6, crecimientoRequerido = 7, valorVentaBase = 8, pvFinalJuego = 7, efecto = "Inflige 1 daño a un oponente al cosechar."),
+    CultivoNormal(id = "zanahoria", nombre = "Zanahoria", costePlantado = 2, crecimientoRequerido = 3, valorVentaBase = 3, pvFinalJuego = 2),
+    CultivoNormal(id = "maiz", nombre = "Maíz Común", costePlantado = 3, crecimientoRequerido = 4, valorVentaBase = 4, pvFinalJuego = 3),
+    CultivoNormal(id = "patata", nombre = "Patata Terrosa", costePlantado = 1, crecimientoRequerido = 4, valorVentaBase = 3, pvFinalJuego = 2),
+    CultivoMutado(id = "tomateCubico", nombre = "Tomate Cúbico", costePlantado = 4, crecimientoRequerido = 4, valorVentaBase = 6, pvFinalJuego = 5, efecto = "Al plantar, puedes descartar 1 token de Zanahoria para colocar 2 ➕ adicionales."),
+    CultivoMutado(id = "maizArcoiris", nombre = "Maíz Arcoíris", costePlantado = 5, crecimientoRequerido = 5, valorVentaBase = 7, pvFinalJuego = 6, efecto = "Al vender, puedes descartar 1 token de Maíz para ganar 3 💰 adicionales."),
+    CultivoMutado(id = "brocoliCristal", nombre = "Brócoli Cristal", costePlantado = 4, crecimientoRequerido = 4, valorVentaBase = 6, pvFinalJuego = 5, efecto = "Al cosechar, puedes descartar 1 token de Patata para cambiar el resultado de un dado."),
+    CultivoMutado(id = "pimientoExplosivo", nombre = "Pimiento Explosivo", costePlantado = 6, crecimientoRequerido = 6, valorVentaBase = 8, pvFinalJuego = 7, efecto = "Al vender, puedes descartar 1 token de Zanahoria y 1 de Maíz para ganar 2 💰 adicionales.")
 )
 
 val allObjectives = listOf(
     Objective(id = "obj_money_15", description = "Acumula 15 Monedas en tu reserva.", rewardPV = 3, type = "money", targetValue = 15),
     Objective(id = "obj_money_25", description = "Acumula 25 Monedas en tu reserva.", rewardPV = 5, type = "money", targetValue = 25),
-    Objective(id = "obj_total_harvest_5", description = "Cosecha un total de 5 cultivos (de cualquier tipo).", rewardPV = 2, type = "total_harvest", targetValue = 5),
-    Objective(id = "obj_total_harvest_10", description = "Cosecha un total de 10 cultivos (de cualquier tipo).", rewardPV = 4, type = "total_harvest", targetValue = 10),
-    Objective(id = "obj_specific_trigo_3", description = "Cosecha 3 Trigos.", rewardPV = 3, type = "specific_harvest", targetValue = 3, targetCropId = "trigo"),
-    Objective(id = "obj_specific_maiz_3", description = "Cosecha 3 Maíces.", rewardPV = 3, type = "specific_harvest", targetValue = 3, targetCropId = "maiz"),
-    Objective(id = "obj_dice_all_same", description = "Realiza una tirada de dados con los 4 símbolos iguales.", rewardPV = 8, type = "dice_roll_all_same", targetValue = 1)
+    Objective(id = "obj_total_harvest_5", description = "Cosecha un total de 5 cultivos.", rewardPV = 2, type = "total_harvest", targetValue = 5),
+    Objective(id = "obj_specific_zanahoria_3", description = "Cosecha 3 Zanahorias.", rewardPV = 3, type = "specific_harvest", targetValue = 3, targetCropId = "zanahoria"),
+    Objective(id = "obj_dice_all_same", description = "Saca los 4 dados con el mismo símbolo.", rewardPV = 8, type = "dice_roll_all_same", targetValue = 1)
+)
+
+val allGranjeros = listOf(
+    Granjero(id = "ingeniero_glitch", nombre = "El Ingeniero Glitch", habilidadPasiva = "Una vez por turno, puedes volver a tirar uno de tus dados sin coste.", habilidadActivable = "Elige uno de tus dados. Puedes cambiar su resultado a la cara que elijas.", costeActivacion = "1 ⚡", iconName = "engineering"),
+    Granjero(id = "botanica_mutante", nombre = "La Botánica Mutante", habilidadPasiva = "Cuando plantas un Cultivo Mutado, colocas sobre él 1 Marcador de Crecimiento adicional.", habilidadActivable = "Elige uno de tus cultivos. Hasta el final del turno, cuenta como si tuviera 2 Marcadores de Crecimiento adicionales para ser cosechado.", costeActivacion = "2 ⚡", iconName = "local_florist"),
+    Granjero(id = "comerciante_sombrio", nombre = "El Comerciante Sombrío", habilidadPasiva = "Ganas 1 Moneda adicional por cada 2 cultivos que vendas en la misma transacción.", habilidadActivable = "Durante esta Fase de Mercado, ganas 1 Moneda adicional por cada cultivo que vendas.", costeActivacion = "1 ⚡", iconName = "storefront"),
+    Granjero(id = "visionaria_pixel", nombre = "La Visionaria Píxel", habilidadPasiva = "Cada vez que resuelvas una Carta de Catástrofe, roba 1 carta del mazo de Mejoras Glitch.", habilidadActivable = "Mira las 3 cartas superiores del Mazo Principal. Añade 1 a tu mano y coloca las otras 2 en la parte superior del mazo en el orden que elijas.", costeActivacion = "1 ⚡", iconName = "visibility")
 )
 
 fun getCropMarketKey(cropName: String): String {
     return when (cropName) {
-        "Trigo" -> "trigo"
-        "Maíz" -> "maiz"
-        "Patata" -> "patata"
-        "Tomate Cuadrado" -> "tomateCuadrado"
+        "Zanahoria" -> "zanahoria"
+        "Maíz Común" -> "maiz"
+        "Patata Terrosa" -> "patata"
+        "Tomate Cúbico" -> "tomateCubico"
         "Maíz Arcoíris" -> "maizArcoiris"
         "Brócoli Cristal" -> "brocoliCristal"
         "Pimiento Explosivo" -> "pimientoExplosivo"
-        else -> {
-            Log.w("GameData", "Unknown crop name for market mapping: $cropName")
-            ""
-        }
+        else -> ""
     }
 }
+

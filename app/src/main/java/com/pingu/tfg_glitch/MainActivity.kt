@@ -1,46 +1,35 @@
 package com.pingu.tfg_glitch
 
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Alignment
-import com.pingu.tfg_glitch.data.FirestoreService
-import com.pingu.tfg_glitch.data.GameService
-import com.pingu.tfg_glitch.ui.screens.MarketScreen
-import com.pingu.tfg_glitch.ui.screens.PlayerManagementScreen
-import com.pingu.tfg_glitch.ui.screens.PlayerActionsScreen
-import com.pingu.tfg_glitch.ui.screens.MainMenuScreen
-import com.pingu.tfg_glitch.ui.screens.MultiplayerMenuScreen
-import com.pingu.tfg_glitch.ui.screens.CreateGameScreen
-import com.pingu.tfg_glitch.ui.screens.JoinGameScreen
-import com.pingu.tfg_glitch.ui.screens.OneMobileScreen
-import com.pingu.tfg_glitch.ui.screens.RulesScreen
-import com.pingu.tfg_glitch.ui.screens.FinalScoreScreen
-import com.pingu.tfg_glitch.ui.screens.ObjectivesScreen
-import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
-import com.pingu.tfg_glitch.ui.theme.GlitchRed
-import com.pingu.tfg_glitch.ui.theme.DarkCard
-import com.pingu.tfg_glitch.ui.theme.AccentPurple
-import com.pingu.tfg_glitch.ui.theme.TextLight
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.firstOrNull
-import android.util.Log
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.pingu.tfg_glitch.data.Game
+import com.pingu.tfg_glitch.data.GameService
+import com.pingu.tfg_glitch.data.UserDataStore
+import com.pingu.tfg_glitch.ui.screens.*
+import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import android.util.Log
 
 class MainActivity : ComponentActivity() {
+    private val userDataStore by lazy { UserDataStore(this) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -49,53 +38,80 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation()
+                    AppNavigation(userDataStore)
                 }
             }
         }
     }
 }
 
-// Instancias de los servicios
+// Instancia del servicio para la gestión de partidas.
 private val gameService = GameService()
-private val firestoreService = FirestoreService() // CORRECCIÓN: Instancia añadida
 
-object SessionManager {
-    private const val PREFS_NAME = "GranjaGlitchPrefs"
-    private const val KEY_GAME_ID = "currentGameId"
-    private const val KEY_PLAYER_ID = "currentPlayerId"
-
-    fun saveSession(context: Context, gameId: String, playerId: String) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString(KEY_GAME_ID, gameId).putString(KEY_PLAYER_ID, playerId).apply()
-        Log.d("SessionManager", "Session saved: gameId=$gameId, playerId=$playerId")
-    }
-
-    fun getSession(context: Context): Pair<String?, String?> {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val gameId = prefs.getString(KEY_GAME_ID, null)
-        val playerId = prefs.getString(KEY_PLAYER_ID, null)
-        Log.d("SessionManager", "Session retrieved: gameId=$gameId, playerId=$playerId")
-        return Pair(gameId, playerId)
-    }
-
-    fun clearSession(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().remove(KEY_GAME_ID).remove(KEY_PLAYER_ID).apply()
-        Log.d("SessionManager", "Session cleared.")
-    }
-}
-
+// Composable principal que maneja la navegación entre pantallas de alto nivel
 @Composable
-fun AppNavigation() {
-    val context = LocalContext.current
-    val (savedGameId, savedPlayerId) = remember { SessionManager.getSession(context) }
+fun AppNavigation(userDataStore: UserDataStore) {
+    val currentScreenState = remember { mutableStateOf("loading") }
+    var currentScreen by currentScreenState
 
-    var currentScreen by rememberSaveable { mutableStateOf(if (savedGameId != null && savedPlayerId != null) "game" else "mainMenu") }
-    var currentGameId by rememberSaveable { mutableStateOf(savedGameId) }
-    var currentPlayerId by rememberSaveable { mutableStateOf(savedPlayerId) }
+    val currentGameIdState = rememberSaveable { mutableStateOf<String?>(null) }
+    var currentGameId by currentGameIdState
+
+    val currentPlayerIdState = rememberSaveable { mutableStateOf<String?>(null) }
+    var currentPlayerId by currentPlayerIdState
+
+    var lastEventName by rememberSaveable { mutableStateOf<String?>(null) }
+    var showEventDialog by rememberSaveable { mutableStateOf(false) }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        val session = userDataStore.readSession()
+        if (session != null) {
+            currentGameId = session.first
+            currentPlayerId = session.second
+            val game = gameService.getGame(currentGameId!!).first()
+            if (game != null && !game.hasGameEnded) {
+                currentScreen = "game"
+            } else {
+                userDataStore.clearSession()
+                currentGameId = null
+                currentPlayerId = null
+                currentScreen = "mainMenu"
+            }
+        } else {
+            currentScreen = "mainMenu"
+        }
+    }
+
+    // Escucha los eventos globales para mostrar un pop-up
+    val game by remember(currentGameId) {
+        if (currentGameId != null) {
+            gameService.getGame(currentGameId!!)
+        } else {
+            MutableStateFlow<Game?>(null)
+        }
+    }.collectAsState(initial = null)
+
+    LaunchedEffect(game) {
+        val currentGame = game
+        if (currentGame?.lastEvent?.name != null && currentGame.lastEvent?.name != lastEventName) {
+            lastEventName = currentGame.lastEvent!!.name
+            showEventDialog = true
+        }
+    }
 
     when (currentScreen) {
+        "loading" -> {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                Text(text = "Cargando sesión...", modifier = Modifier.padding(top = 16.dp))
+            }
+        }
         "mainMenu" -> MainMenuScreen(
             onStartGame = { currentScreen = "multiplayerMenu" },
             onViewRules = { currentScreen = "rules" },
@@ -108,20 +124,49 @@ fun AppNavigation() {
         )
         "createGame" -> CreateGameScreen(
             onGameCreated = { gameId, hostPlayerId ->
-                SessionManager.saveSession(context, gameId, hostPlayerId)
+                Log.d("AppNavigation", "Game created: $gameId, Host Player: $hostPlayerId")
                 currentGameId = gameId
                 currentPlayerId = hostPlayerId
-                currentScreen = "game"
-            }
+                currentScreen = "lobby"
+                coroutineScope.launch {
+                    userDataStore.saveSession(gameId, hostPlayerId)
+                }
+            },
+            onBack = { currentScreen = "multiplayerMenu" }
         )
         "joinGame" -> JoinGameScreen(
             onGameJoined = { gameId, playerId ->
-                SessionManager.saveSession(context, gameId, playerId)
+                Log.d("AppNavigation", "Joined game: $gameId, Current Player: $playerId")
                 currentGameId = gameId
                 currentPlayerId = playerId
-                currentScreen = "game"
-            }
+                currentScreen = "lobby"
+                coroutineScope.launch {
+                    userDataStore.saveSession(gameId, playerId)
+                }
+            },
+            onBack = { currentScreen = "multiplayerMenu" }
         )
+        "lobby" -> {
+            val gameId = currentGameId
+            val playerId = currentPlayerId
+            if (gameId != null && playerId != null) {
+                LobbyScreen(
+                    gameId = gameId,
+                    currentPlayerId = playerId,
+                    onGameStarted = {
+                        currentScreen = "game"
+                    },
+                    onBack = {
+                        coroutineScope.launch {
+                            userDataStore.clearSession()
+                            currentGameId = null
+                            currentPlayerId = null
+                            currentScreen = "mainMenu"
+                        }
+                    }
+                )
+            }
+        }
         "game" -> {
             val gameId = currentGameId
             val playerId = currentPlayerId
@@ -129,21 +174,24 @@ fun AppNavigation() {
                 GameScreen(
                     gameId = gameId,
                     currentPlayerId = playerId,
-                    onGameEnded = { currentScreen = "finalScore" }
+                    onGameEnded = {
+                        Log.d("AppNavigation", "Game has ended. Navigating to FinalScoreScreen.")
+                        currentScreen = "finalScore"
+                    }
                 )
             } else {
                 LaunchedEffect(Unit) {
-                    SessionManager.clearSession(context)
-                    currentScreen = "mainMenu"
+                    Log.w("AppNavigation", "gameId or playerId is null, returning to mainMenu.")
+                    currentScreenState.value = "mainMenu"
                 }
             }
         }
         "oneMobileMode" -> {
             OneMobileScreen(
                 onBackToMainMenu = {
-                    currentGameId = null
-                    currentPlayerId = null
-                    currentScreen = "mainMenu"
+                    currentGameIdState.value = null
+                    currentPlayerIdState.value = null
+                    currentScreenState.value = "mainMenu"
                 }
             )
         }
@@ -156,78 +204,64 @@ fun AppNavigation() {
                 FinalScoreScreen(
                     gameId = gameId,
                     onBackToMainMenu = {
-                        SessionManager.clearSession(context)
-                        currentGameId = null
-                        currentPlayerId = null
-                        currentScreen = "mainMenu"
+                        coroutineScope.launch {
+                            userDataStore.clearSession()
+                            currentGameId = null
+                            currentPlayerId = null
+                            currentScreen = "mainMenu"
+                        }
                     }
                 )
             } else {
                 LaunchedEffect(Unit) {
-                    SessionManager.clearSession(context)
-                    currentScreen = "mainMenu"
+                    Log.w("AppNavigation", "gameId is null in finalScore, returning to mainMenu.")
+                    currentScreenState.value = "mainMenu"
                 }
             }
         }
     }
+
+    if (showEventDialog && currentGameId != null) {
+        val currentGame = game
+        if (currentGame != null) {
+            AlertDialog(
+                onDismissRequest = { showEventDialog = false },
+                title = { Text(text = currentGame.lastEvent?.name ?: "Evento Glitch") },
+                text = { Text(text = currentGame.lastEvent?.description ?: "Un evento ha ocurrido.") },
+                confirmButton = {
+                    TextButton(onClick = { showEventDialog = false }) {
+                        Text("Aceptar", fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
+        }
+    }
 }
 
+// Composable que contiene las pantallas de juego con la barra de navegación inferior
 @Composable
 fun GameScreen(
     gameId: String,
     currentPlayerId: String,
     onGameEnded: () -> Unit
 ) {
-    var selectedGameScreen by remember { mutableStateOf("actions") }
+    var selectedGameScreen by rememberSaveable { mutableStateOf("actions") }
     val game by gameService.getGame(gameId).collectAsState(initial = null)
-    val currentPlayer by firestoreService.getPlayer(currentPlayerId).collectAsState(initial = null)
-    val coroutineScope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
 
-    var isGameLoading by remember { mutableStateOf(true) }
-
-    var turnPopupShownForTurnId by remember { mutableStateOf<String?>(null) }
-
-
-    val isHost = remember(game, currentPlayerId) {
-        game?.hostPlayerId == currentPlayerId
-    }
-
-    LaunchedEffect(game, currentPlayer) { // Escuchar cambios en currentPlayer también
+    // Observa el estado de la partida para navegar a la pantalla final
+    LaunchedEffect(game) {
         val gameData = game
         if (gameData != null) {
-            if (isGameLoading) {
-                isGameLoading = false
-            }
             if (gameData.hasGameEnded) {
+                Log.d("GameScreen", "Game hasEnded detected. Calling onGameEnded.")
                 onGameEnded()
             }
-            // CORRECCIÓN SALTO DE MERCADO: Lógica para saltar el mercado si no hay inventario
-            if (gameData.roundPhase == "MARKET_PHASE" &&
-                currentPlayer?.inventario.isNullOrEmpty() && // CORRECCIÓN: Acceso a la propiedad
-                !gameData.playersFinishedMarket.contains(currentPlayerId)) {
-
-                coroutineScope.launch {
-                    gameService.playerFinishedMarket(gameId, currentPlayerId)
-                    snackbarHostState.showSnackbar(
-                        message = "No tienes nada que vender. Turno de mercado saltado.",
-                        duration = SnackbarDuration.Short
-                    )
-                }
-            }
-        }
-        else if (game == null && !isGameLoading) {
-            onGameEnded()
         }
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ) {
+            NavigationBar {
                 NavigationBarItem(
                     selected = selectedGameScreen == "actions",
                     onClick = { selectedGameScreen = "actions" },
@@ -237,42 +271,28 @@ fun GameScreen(
                 NavigationBarItem(
                     selected = selectedGameScreen == "market",
                     onClick = { selectedGameScreen = "market" },
-                    icon = { Icon(Icons.Filled.Home, contentDescription = "Mercado") },
+                    icon = { Icon(Icons.Filled.Storefront, contentDescription = "Mercado") },
                     label = { Text("Mercado") }
                 )
                 NavigationBarItem(
                     selected = selectedGameScreen == "objectives",
                     onClick = { selectedGameScreen = "objectives" },
-                    icon = { Icon(Icons.Filled.Star, contentDescription = "Objetivos") },
+                    icon = { Icon(Icons.Filled.WorkspacePremium, contentDescription = "Objetivos") },
                     label = { Text("Objetivos") }
                 )
                 NavigationBarItem(
                     selected = selectedGameScreen == "players",
                     onClick = { selectedGameScreen = "players" },
-                    icon = { Icon(Icons.Filled.Build, contentDescription = "Jugadores") },
+                    icon = { Icon(Icons.Filled.Groups, contentDescription = "Jugadores") },
                     label = { Text("Jugadores") }
                 )
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
-            if (isGameLoading) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(48.dp), color = AccentPurple)
-                    Text(text = "Cargando partida...", color = TextLight, modifier = Modifier.padding(top = 8.dp))
-                }
-            } else {
-                when (selectedGameScreen) {
-                    "actions" -> PlayerActionsScreen(
-                        gameId = gameId,
-                        currentPlayerId = currentPlayerId,
-                        hasShownTurnPopup = turnPopupShownForTurnId == game?.currentPlayerTurnId,
-                        onTurnPopupShown = { turnPopupShownForTurnId = game?.currentPlayerTurnId }
-                    )
+        AnimatedContent(targetState = selectedGameScreen, label = "GameScreenAnimation") { targetScreen ->
+            Box(modifier = Modifier.padding(innerPadding)) {
+                when (targetScreen) {
+                    "actions" -> PlayerActionsScreen(gameId = gameId, currentPlayerId = currentPlayerId)
                     "market" -> MarketScreen(gameId = gameId, currentPlayerId = currentPlayerId)
                     "objectives" -> ObjectivesScreen(gameId = gameId, currentPlayerId = currentPlayerId)
                     "players" -> PlayerManagementScreen(

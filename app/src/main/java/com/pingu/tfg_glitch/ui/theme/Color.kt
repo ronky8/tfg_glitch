@@ -2,7 +2,35 @@ package com.pingu.tfg_glitch.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// --- Paleta de colores Original (para compatibilidad) ---
+// --- Nueva Paleta de Material Design Estándar ---
+val PrimaryPurple = Color(0xFF6200EE)
+val PrimaryVariantPurple = Color(0xFF3700B3)
+val SecondaryGreen = Color(0xFF03DAC6)
+val BackgroundDark = Color(0xFF121212)
+val SurfaceDark = Color(0xFF1E1E1E) // Ligeramente más claro que el fondo
+val OnSurfaceText = Color(0xFFE0E0E0) // Texto principal sobre fondos oscuros
+val OnPrimaryText = Color.White
+val ErrorRed = Color(0xFFCF6679)
+
+// --- Colores de Acento y Estado ---
+val AccentGold = Color(0xFFFFD700) // Para dinero y elementos destacados
+val PositiveGreen = Color(0xFF66BB6A) // Para confirmaciones y estados positivos
+val WarningRed = Color(0xFFEF5350) // Para errores y alertas
+val InfoBlue = Color(0xFF42A5F5) // Para información y eventos
+
+// --- Paletas Anteriores (Guardadas para futura implementación de temas) ---
+
+// Paleta "Pixel Art Glitchy" (Archivada)
+/*
+val PixelBackground = Color(0xFF1A1A2E)
+val PixelCard = Color(0xFF16213E)
+val PixelText = Color(0xFFE0F2F1)
+val GlitchCyan = Color(0xFF00FFFF)
+val GlitchMagenta = Color(0xFFF000FF)
+val GlitchLime = Color(0xFFAEFF00)
+*/
+
+// Paleta Original (Archivada)
 val DarkBackground = Color(0xFF1A202C)
 val DarkCard = Color(0xFF2D3748)
 val AccentPurple = Color(0xFF6B46C1)
@@ -11,25 +39,6 @@ val AccentRed = Color(0xFFF56565)
 val TextLight = Color(0xFFA0AEC0)
 val CardBackground = Color(0xFF4A5568)
 val GlitchBlue = Color(0xFF3182CE)
-
-// --- Paleta de colores "Pixel Art Glitchy" ---
-val PixelBackground = Color(0xFF1A1A2E) // Un azul noche muy oscuro
-val PixelCard = Color(0xFF16213E)     // Un azul más profundo para las tarjetas
-val PixelText = Color(0xFFE0F2F1)     // Un blanco azulado muy claro para el texto
-
-val GlitchCyan = Color(0xFF00FFFF)    // Cian neón para bordes y elementos importantes
-val GlitchMagenta = Color(0xFFF000FF) // Magenta neón para acciones y alertas
-val GlitchLime = Color(0xFFAEFF00)     // Lima para acentos positivos como el dinero
-
-// --- [NUEVO] Paleta de colores "Stardew Valley" ---
-val StardewBackground = Color(0xFF343050) // Un morado oscuro y desaturado
-val StardewCard = Color(0xFF474068)      // Un morado ligeramente más claro para las tarjetas
-val StardewText = Color(0xFFFFEDB9)      // Un color crema para el texto
-val StardewGreen = Color(0xFF95C56F)      // Verde hoja
-val StardewBrown = Color(0xFF8B5E3C)      // Marrón tierra
-val StardewSky = Color(0xFF82C4E8)        // Azul cielo
-
-// --- Colores compartidos o mantenidos ---
 val AccentYellow = Color(0xFFF6E05E)
 val GlitchRed = Color(0xFFE53E3E)
 val TextWhite = Color(0xFFFFFFFF)

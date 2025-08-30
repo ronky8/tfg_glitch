@@ -7,26 +7,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // Configuración de la tipografía para el tema de la app.
+// Cambiamos a la tipografía por defecto para un look más estándar de Material Design.
 val Typography = Typography(
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Monospace, // Usamos Monospace para simular una fuente pixel
+        fontFamily = FontFamily.Default, // Usamos la fuente por defecto del sistema
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.5.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Bold, // Títulos en negrita
-        fontSize = 24.sp, // Ligeramente más grande
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp,
         lineHeight = 28.sp,
         letterSpacing = 0.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = FontFamily.Monospace,
+        fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
-        fontSize = 12.sp, // Un poco más grande para legibilidad
+        fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp
     )
+    /* La tipografía Monospace se puede reintroducir para un tema "Glitch" opcional
+    bodyLarge = TextStyle(
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.5.sp
+    ),
+    ...
+    */
 )

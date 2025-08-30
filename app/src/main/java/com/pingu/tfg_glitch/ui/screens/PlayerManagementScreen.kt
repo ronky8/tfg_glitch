@@ -1,58 +1,36 @@
 package com.pingu.tfg_glitch.ui.screens
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.pingu.tfg_glitch.data.FirestoreService
-import com.pingu.tfg_glitch.data.GameService
-import com.pingu.tfg_glitch.data.Player
-import com.pingu.tfg_glitch.ui.theme.AccentPurple
-import com.pingu.tfg_glitch.ui.theme.AccentYellow
-import com.pingu.tfg_glitch.ui.theme.DarkCard
-import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
-import com.pingu.tfg_glitch.ui.theme.TextLight
-import com.pingu.tfg_glitch.ui.theme.TextWhite
-import kotlinx.coroutines.launch
-import android.util.Log
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.RemoveCircleOutline
-import com.pingu.tfg_glitch.data.allCrops
-import com.pingu.tfg_glitch.data.allObjectives
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import com.pingu.tfg_glitch.data.*
+import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-import com.pingu.tfg_glitch.ui.theme.AccentGreen
-import com.pingu.tfg_glitch.ui.theme.DarkBackground
-import com.pingu.tfg_glitch.ui.theme.GlitchRed
 
-
-// Instancias de servicios
+// --- Instancias de servicios ---
 private val firestoreService = FirestoreService()
 private val gameService = GameService()
 
-// Composable para la pantalla de gestión de jugadores
+
+// ========================================================================
+// --- Pantalla Principal de Gestión de Jugadores ---
+// ========================================================================
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerManagementScreen(
@@ -60,6 +38,7 @@ fun PlayerManagementScreen(
     currentPlayerId: String,
     onGameEnded: () -> Unit
 ) {
+    // --- Estados ---
     val game by gameService.getGame(gameId).collectAsState(initial = null)
     val allPlayers by firestoreService.getPlayersInGame(gameId).collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
@@ -67,14 +46,15 @@ fun PlayerManagementScreen(
 
     var showEndGameDialog by remember { mutableStateOf(false) }
 
-    val isHost = remember(game, currentPlayerId) {
-        game?.hostPlayerId == currentPlayerId
+    // --- Estados Derivados ---
+    val isHost by remember(game, currentPlayerId) {
+        derivedStateOf { game?.hostPlayerId == currentPlayerId }
+    }
+    val allPlayersFinishedMarket by remember(game, allPlayers) {
+        derivedStateOf { game != null && allPlayers.isNotEmpty() && game!!.playersFinishedMarket.size == allPlayers.size }
     }
 
-    val allPlayersFinishedMarket = remember(game, allPlayers) {
-        game?.playersFinishedMarket?.size == allPlayers.size && allPlayers.isNotEmpty()
-    }
-
+    // --- UI Principal ---
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
@@ -82,423 +62,332 @@ fun PlayerManagementScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "Jugadores en Partida",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = AccentPurple,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
+            // Contenido de la pantalla
             if (game == null || allPlayers.isEmpty()) {
-                CircularProgressIndicator(modifier = Modifier.size(48.dp), color = AccentPurple)
-                Text(text = "Cargando jugadores...", color = TextLight, modifier = Modifier.padding(top = 8.dp))
-                Spacer(modifier = Modifier.weight(1f))
+                // Estado de carga
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
             } else {
-                val currentTurnPlayer = allPlayers.find { it.id == game?.currentPlayerTurnId }
-                val phaseText = when (game?.roundPhase) {
-                    "PLAYER_ACTIONS" -> {
-                        if (currentTurnPlayer != null) "Turno de: ${currentTurnPlayer.name}" else "Fase de Acciones (Cargando turno...)"
-                    }
-                    "MARKET_PHASE" -> "Fase Actual: Mercado Glitch"
-                    else -> "Cargando fase..."
-                }
-                val phaseColor = when (game?.roundPhase) {
-                    "PLAYER_ACTIONS" -> AccentYellow
-                    "MARKET_PHASE" -> AccentGreen
-                    else -> TextLight
-                }
-
-                Text(
-                    text = phaseText,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = phaseColor,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
+                // Contenido principal
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    items(allPlayers) { player ->
+                    item {
+                        StatusHeader(game = game, allPlayers = allPlayers)
+                    }
+                    items(allPlayers, key = { it.id }) { player ->
                         PlayerCard(
                             player = player,
                             isHost = isHost,
-                            currentPlayerId = currentPlayerId,
-                            currentTurnPlayerId = game?.currentPlayerTurnId,
-                            onAdjustResources = { targetPlayerId, moneyDelta, energyDelta ->
+                            isCurrentPlayer = player.id == currentPlayerId,
+                            onAdjustPV = { pvDelta ->
                                 coroutineScope.launch {
-                                    val success = gameService.adjustPlayerResourcesManually(targetPlayerId, moneyDelta, energyDelta)
-                                    snackbarHostState.showSnackbar(
-                                        if (success) "Recursos de ${player.name} ajustados." else "Error al ajustar recursos."
-                                    )
+                                    val success = gameService.adjustPlayerManualBonusPV(player.id, pvDelta)
+                                    if (success) snackbarHostState.showSnackbar("PV de ${player.name} ajustados.")
                                 }
                             },
-                            onAdjustPV = { targetPlayerId, pvDelta ->
+                            onAdjustResources = { moneyDelta, energyDelta ->
                                 coroutineScope.launch {
-                                    val success = gameService.adjustPlayerManualBonusPV(targetPlayerId, pvDelta)
-                                    snackbarHostState.showSnackbar(
-                                        if (success) "PV de ${player.name} ajustados." else "Error al ajustar PV."
-                                    )
+                                    val success = gameService.adjustPlayerResourcesManually(player.id, moneyDelta, energyDelta)
+                                    if (success) snackbarHostState.showSnackbar("Recursos de ${player.name} ajustados.")
                                 }
                             },
-                            onRemoveCrop = { targetPlayerId, cropId, quantity ->
+                            onDeletePlayer = {
                                 coroutineScope.launch {
-                                    val success = gameService.removeCropFromInventory(targetPlayerId, cropId, quantity)
-                                    snackbarHostState.showSnackbar(
-                                        if (success) "Cultivo eliminado del inventario." else "Error al eliminar cultivo."
-                                    )
-                                }
-                            },
-                            onForceTurn = {
-                                coroutineScope.launch {
-                                    gameService.forceAdvanceTurn(gameId)
-                                    snackbarHostState.showSnackbar(
-                                        message = "Turno de ${currentTurnPlayer?.name ?: "jugador"} forzado a pasar.",
-                                        duration = SnackbarDuration.Short
-                                    )
+                                    gameService.deletePlayer(player.id)
+                                    snackbarHostState.showSnackbar("${player.name} ha sido eliminado.")
                                 }
                             }
                         )
                     }
                 }
 
-                if (isHost && game?.roundPhase == "MARKET_PHASE") {
-                    Button(
-                        onClick = {
+                // Controles del Anfitrión
+                if (isHost) {
+                    HostControls(
+                        game = game!!,
+                        allPlayersFinishedMarket = allPlayersFinishedMarket,
+                        onAdvanceRound = {
                             coroutineScope.launch {
                                 val success = gameService.advanceRound(gameId)
                                 snackbarHostState.showSnackbar(
-                                    if (success) "¡Ronda avanzada!" else "No se pudo avanzar la ronda. ¿Han terminado todos?"
+                                    if (success) "¡Ronda avanzada!" else "Aún no todos han terminado en el mercado."
                                 )
                             }
                         },
-                        enabled = allPlayersFinishedMarket,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(60.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = if (allPlayersFinishedMarket) AccentPurple else Color.Gray),
-                        shape = RoundedCornerShape(24.dp),
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        Text(text = "Siguiente Ronda (Solo Host)", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextWhite)
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                if (isHost) {
-                    Button(
-                        onClick = { showEndGameDialog = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(60.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),
-                        shape = RoundedCornerShape(24.dp),
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        Text(text = "Terminar Partida (Solo Host)", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextWhite)
-                    }
+                        onEndGame = { showEndGameDialog = true }
+                    )
                 }
             }
         }
     }
 
+    // Diálogo de fin de partida
     if (showEndGameDialog) {
-        AlertDialog(
-            onDismissRequest = { showEndGameDialog = false },
-            title = { Text("¿Cómo quieres terminar la partida?") },
-            text = { Text("Puedes terminar la partida calculando los puntos finales o de forma repentina sin puntuación.") },
-            confirmButton = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                showEndGameDialog = false
-                                gameService.endGameByPoints(gameId)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
-                    ) {
-                        Text("Terminar por Puntos")
-                    }
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                showEndGameDialog = false
-                                gameService.markGameAsEnded(gameId)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = GlitchRed)
-                    ) {
-                        Text("Terminar Repentinamente")
-                    }
+        EndGameDialog(
+            onDismiss = { showEndGameDialog = false },
+            onEndByPoints = {
+                coroutineScope.launch {
+                    gameService.endGameByPoints(gameId)
+                    showEndGameDialog = false
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showEndGameDialog = false }) {
-                    Text("Cancelar")
+            onEndAbruptly = {
+                coroutineScope.launch {
+                    gameService.markGameAsEnded(gameId)
+                    showEndGameDialog = false
                 }
-            },
-            containerColor = DarkCard,
-            titleContentColor = AccentPurple,
-            textContentColor = TextLight,
-            tonalElevation = 8.dp,
-            shape = RoundedCornerShape(16.dp)
+            }
         )
     }
 }
 
+
+// ========================================================================
+// --- Sub-componentes de la pantalla ---
+// ========================================================================
+
+/**
+ * Muestra el estado actual de la partida (fase y turno).
+ */
 @Composable
-fun PlayerCard(
+private fun StatusHeader(game: Game?, allPlayers: List<Player>) {
+    val currentTurnPlayer = allPlayers.find { it.id == game?.currentPlayerTurnId }
+    val phaseText = when (game?.roundPhase) {
+        "PLAYER_ACTIONS" -> if (currentTurnPlayer != null) "Turno de: ${currentTurnPlayer.name}" else "Fase de Acciones"
+        "MARKET_PHASE" -> "Fase de Mercado"
+        else -> "Cargando..."
+    }
+    val phaseColor = when (game?.roundPhase) {
+        "PLAYER_ACTIONS" -> MaterialTheme.colorScheme.secondary
+        "MARKET_PHASE" -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = "Gestión de Partida", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Text(text = phaseText, style = MaterialTheme.typography.titleMedium, color = phaseColor)
+        game?.roundNumber?.let { round ->
+            Text(text = "Ronda $round", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+/**
+ * Tarjeta que muestra la información detallada de un jugador y los controles del anfitrión.
+ */
+@Composable
+private fun PlayerCard(
     player: Player,
     isHost: Boolean,
-    currentPlayerId: String,
-    currentTurnPlayerId: String?,
-    onAdjustResources: (String, Int, Int) -> Unit,
-    onAdjustPV: (String, Int) -> Unit,
-    onRemoveCrop: (playerId: String, cropId: String, quantity: Int) -> Unit,
-    onForceTurn: () -> Unit
+    isCurrentPlayer: Boolean,
+    onAdjustPV: (Int) -> Unit,
+    onAdjustResources: (Int, Int) -> Unit,
+    onDeletePlayer: () -> Unit
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope() // CORRECCIÓN: Usar el scope de compose
+    val coroutineScope = rememberCoroutineScope()
+    var expanded by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "Nombre: ${player.name}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AccentYellow)
-                if (player.id == currentPlayerId) {
-                    Text(text = " (Tú)", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextLight)
+    // Calcular PV
+    val totalPV = remember(player) {
+        val moneyPV = player.money / 5
+        val totalUnsoldValue = player.inventario.sumOf { it.valorVentaBase * it.cantidad }
+        val unsoldCropsPV = (totalUnsoldValue.toDouble() / 3.0).roundToInt()
+        val objectivesPV = player.objectivesClaimed.sumOf { objId ->
+            allObjectives.find { it.id == objId }?.rewardPV ?: 0
+        }
+        moneyPV + unsoldCropsPV + objectivesPV + player.manualBonusPV
+    }
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            // Fila principal con nombre, PV y botón de expandir
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isCurrentPlayer) {
+                        Icon(Icons.Default.Person, contentDescription = "Tú", modifier = Modifier.padding(end = 8.dp))
+                    }
+                    Text(text = player.name, style = MaterialTheme.typography.titleLarge)
                 }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "ID: ${player.id.take(8)}...", fontSize = 14.sp, color = TextLight)
-                IconButton(
-                    onClick = {
-                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clipData = ClipData.newPlainText("Player ID", player.id)
-                        clipboardManager.setPrimaryClip(clipData)
-                    },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copiar ID de jugador", tint = TextLight)
-                }
-            }
-            Text(text = "Monedas: ${player.money} 💰", fontSize = 16.sp, color = TextLight)
-            Text(text = "Energía Glitch: ${player.glitchEnergy} ⚡", fontSize = 16.sp, color = TextLight)
-
-            val moneyPV = player.money / 5
-            val totalUnsoldValue = player.inventario.sumOf { it.valorVentaBase * it.cantidad }
-            val unsoldCropsPV = (totalUnsoldValue.toDouble() / 3.0).roundToInt()
-            val objectivesPV = player.objectivesClaimed.sumOf { objId ->
-                allObjectives.find { it.id == objId }?.rewardPV ?: 0
-            }
-            val totalPV = moneyPV + unsoldCropsPV + objectivesPV + player.manualBonusPV
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "PV Total: $totalPV PV", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AccentYellow)
-            if (player.manualBonusPV != 0) {
-                Text(text = "PV Ajuste Manual: ${player.manualBonusPV} PV", fontSize = 14.sp, color = TextLight)
-            }
-
-            if (isHost) {
-                if (player.inventario.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Ajustar Inventario (Manual):",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = AccentPurple
-                    )
-                    player.inventario.forEach { item ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "${item.nombre} (x${item.cantidad})",
-                                color = TextLight,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = { onRemoveCrop(player.id, item.id, 1) },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.RemoveCircleOutline,
-                                    contentDescription = "Eliminar 1 ${item.nombre}",
-                                    tint = GlitchRed
-                                )
-                            }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "$totalPV PV", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    if (isHost) {
+                        IconButton(onClick = { expanded = !expanded }) {
+                            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Expandir")
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Ajustar PV (Manual):",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AccentPurple
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Button(
-                        onClick = { onAdjustPV(player.id, -1) },
-                        colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        modifier = Modifier.weight(0.5f)
-                    ) {
-                        Icon(Icons.Filled.Remove, contentDescription = "Restar 1 PV", tint = TextWhite)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("-1 PV", fontSize = 14.sp, color = TextWhite)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { onAdjustPV(player.id, 1) },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        modifier = Modifier.weight(0.5f)
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Añadir 1 PV", tint = TextWhite)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("+1 PV", fontSize = 14.sp, color = TextWhite)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Ajustar Monedas/Energía (Manual):",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AccentPurple
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Button(
-                        onClick = { onAdjustResources(player.id, -1, 0) },
-                        colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        modifier = Modifier.weight(0.5f)
-                    ) {
-                        Icon(Icons.Filled.Remove, contentDescription = "Restar 1 Moneda", tint = TextWhite)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("-1 💰", fontSize = 14.sp, color = TextWhite)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { onAdjustResources(player.id, 1, 0) },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        modifier = Modifier.weight(0.5f)
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Añadir 1 Moneda", tint = TextWhite)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("+1 💰", fontSize = 14.sp, color = TextWhite)
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Button(
-                        onClick = { onAdjustResources(player.id, 0, -1) },
-                        colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        modifier = Modifier.weight(0.5f)
-                    ) {
-                        Icon(Icons.Filled.Remove, contentDescription = "Restar 1 Energía", tint = TextWhite)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("-1 ⚡", fontSize = 14.sp, color = TextWhite)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { onAdjustResources(player.id, 0, 1) },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        modifier = Modifier.weight(0.5f)
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Añadir 1 Energía", tint = TextWhite)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("+1 ⚡", fontSize = 14.sp, color = TextWhite)
-                    }
-                }
             }
 
-            if (isHost && player.id == currentTurnPlayerId && player.id != currentPlayerId) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = onForceTurn,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Forzar Pasar Turno (Host)", color = DarkBackground, fontWeight = FontWeight.Bold)
-                }
+            // Información de recursos
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("💰 ${player.money}", style = MaterialTheme.typography.bodyLarge)
+                Text("⚡ ${player.glitchEnergy}", style = MaterialTheme.typography.bodyLarge)
             }
 
-            if (isHost && player.id != currentPlayerId) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        coroutineScope.launch {
-                            gameService.deletePlayer(player.id)
-                            Log.d("PlayerManagementScreen", "Player ${player.name} (${player.id}) deleted by host.")
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = GlitchRed),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text("Eliminar Jugador", fontSize = 14.sp, color = TextWhite)
+            // Controles expandibles del anfitrión
+            if (expanded && isHost) {
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                // Ajuste de Monedas y Energía
+                AdjustmentRow(
+                    label = "Recursos",
+                    onAdd = { onAdjustResources(1, 0) },
+                    onRemove = { onAdjustResources(-1, 0) },
+                    icon = Icons.Default.Paid
+                )
+                AdjustmentRow(
+                    label = "",
+                    onAdd = { onAdjustResources(0, 1) },
+                    onRemove = { onAdjustResources(0, -1) },
+                    icon = Icons.Default.Bolt
+                )
+                // Ajuste de PV
+                AdjustmentRow(
+                    label = "Puntos Victoria",
+                    onAdd = { onAdjustPV(1) },
+                    onRemove = { onAdjustPV(-1) },
+                    icon = Icons.Default.Star
+                )
+
+                // Botón de eliminar
+                if (!isCurrentPlayer) { // El anfitrión no se puede eliminar a sí mismo
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onDeletePlayer,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar")
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text("Eliminar Jugador")
+                    }
                 }
             }
         }
     }
 }
+
+/**
+ * Fila de botones para ajustar valores (+/-).
+ */
+@Composable
+private fun AdjustmentRow(label: String, onAdd: () -> Unit, onRemove: () -> Unit, icon: ImageVector) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.width(8.dp))
+            FilledTonalButton(onClick = onRemove, contentPadding = PaddingValues(8.dp)) {
+                Icon(Icons.Default.Remove, contentDescription = "Restar")
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            FilledTonalButton(onClick = onAdd, contentPadding = PaddingValues(8.dp)) {
+                Icon(Icons.Default.Add, contentDescription = "Añadir")
+            }
+        }
+    }
+}
+
+/**
+ * Botones de acción principales para el anfitrión en la parte inferior de la pantalla.
+ */
+@Composable
+private fun HostControls(
+    game: Game,
+    allPlayersFinishedMarket: Boolean,
+    onAdvanceRound: () -> Unit,
+    onEndGame: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (game.roundPhase == "MARKET_PHASE") {
+            Button(
+                onClick = onAdvanceRound,
+                enabled = allPlayersFinishedMarket,
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) {
+                Text("Siguiente Ronda")
+            }
+        }
+        Button(
+            onClick = onEndGame,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
+            Text("Terminar Partida")
+        }
+    }
+}
+
+/**
+ * Diálogo de confirmación para terminar la partida.
+ */
+@Composable
+private fun EndGameDialog(
+    onDismiss: () -> Unit,
+    onEndByPoints: () -> Unit,
+    onEndAbruptly: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("¿Terminar la partida?") },
+        text = { Text("Puedes calcular los puntos finales o terminarla de forma repentina (no se podrá ver la puntuación).") },
+        confirmButton = {
+            Column {
+                Button(
+                    onClick = onEndByPoints,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Terminar y Ver Puntuación")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onEndAbruptly,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Terminar Repentinamente")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+// ========================================================================
+// --- Preview ---
+// ========================================================================
 
 @Preview(showBackground = true)
 @Composable
 fun PlayerManagementScreenPreview() {
     GranjaGlitchAppTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            PlayerManagementScreen(
-                gameId = "sampleGame123",
-                currentPlayerId = "samplePlayer456",
-                onGameEnded = {}
-            )
+        Surface {
+            PlayerManagementScreen(gameId = "sample", currentPlayerId = "host", onGameEnded = {})
         }
     }
 }

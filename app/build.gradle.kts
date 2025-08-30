@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "com.pingu.tfg_glitch"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.pingu.tfg_glitch"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -42,6 +42,9 @@ android {
 
 dependencies {
 
+
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
     implementation("com.google.firebase:firebase-analytics")

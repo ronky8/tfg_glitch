@@ -7,22 +7,21 @@ import java.util.UUID
  * This will be stored as a single document in Firestore.
  */
 data class Game(
-    val id: String = "",
-    val playerIds: MutableList<String> = mutableListOf(),
-    var hostPlayerId: String? = null,
+    val id: String = "", // Ahora el ID se genera en GameService para ser de 6 caracteres
+    val playerIds: MutableList<String> = mutableListOf(), // IDs of players in this game
+    var hostPlayerId: String? = null, // ID of the player who created the game
     var isStarted: Boolean = false,
     var hasGameEnded: Boolean = false,
-    var catastrophesResolved: Int = 0,
-    var marketPrices: MarketPrices = initialMarketPrices,
-    var lastEvent: GlitchEvent? = null,
-    var supplyFailureActive: Boolean = false,
-    var signalInterferenceActive: Boolean = false,
-    var currentPlayerTurnId: String? = null,
-    var roundStartPlayerId: String? = null, // Para corregir el orden de turno
-    var roundPhase: String = "PLAYER_ACTIONS",
-    val playersFinishedTurn: MutableList<String> = mutableListOf(),
-    val playersFinishedMarket: MutableList<String> = mutableListOf(),
-    val activeObjectives: MutableList<Objective> = mutableListOf(),
-    val claimedObjectivesByPlayer: MutableMap<String, MutableList<String>> = mutableMapOf(),
-    val temporaryPriceBoosts: MutableMap<String, Int> = mutableMapOf() // Para habilidad del Comerciante (Global)
+    var marketPrices: MarketPrices = initialMarketPrices, // ¡Ahora usa initialMarketPrices del archivo consolidado GameData.kt!
+    var lastEvent: GlitchEvent? = null, // ¡Ahora usa GlitchEvent del archivo consolidado GameData.kt!
+    var supplyFailureActive: Boolean = false, // Persistent effect from "Fallo de Suministro"
+    var signalInterferenceActive: Boolean = false, // Temporary effect from "Interferencia de Señal"
+    var currentPlayerTurnId: String? = null, // ID del jugador cuyo turno es actual
+    var roundPhase: String = "PLAYER_ACTIONS", // Fase actual de la ronda: "PLAYER_ACTIONS", "MARKET_PHASE"
+    val playersFinishedTurn: MutableList<String> = mutableListOf(), // Jugadores que han terminado su fase de acciones
+    val playersFinishedMarket: MutableList<String> = mutableListOf(), // Jugadores que han terminado su fase de mercado
+    val activeObjectives: MutableList<Objective> = mutableListOf(), // Objetivos activos en esta partida
+    val claimedObjectivesByPlayer: MutableMap<String, MutableList<String>> = mutableMapOf(), // Mapa de PlayerId a lista de Objective IDs reclamados
+    var playerOrder: MutableList<String> = mutableListOf(), // [¡NUEVO!] Orden de los jugadores
+    var roundNumber: Int = 0
 )

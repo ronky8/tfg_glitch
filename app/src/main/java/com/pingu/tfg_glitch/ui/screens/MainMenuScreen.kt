@@ -11,17 +11,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.pingu.tfg_glitch.ui.theme.AccentPurple
-import com.pingu.tfg_glitch.ui.theme.AccentYellow
+import com.pingu.tfg_glitch.ui.theme.AccentGold
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
-import com.pingu.tfg_glitch.ui.theme.TextWhite
 
 // Composable para la pantalla principal del menú
 @Composable
 fun MainMenuScreen(
     onStartGame: () -> Unit,
     onViewRules: () -> Unit,
-    onOneMobileMode: () -> Unit // Nuevo callback para el modo un móvil
+    onOneMobileMode: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -30,66 +28,71 @@ fun MainMenuScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Spacer(Modifier.weight(0.5f))
+        // Espaciador flexible para centrar el contenido verticalmente
+        Spacer(Modifier.weight(1f))
 
+        // Título de la aplicación
         Text(
             text = "Granja Glitch",
-            fontSize = 48.sp,
-            fontWeight = FontWeight.Black,
-            color = AccentYellow,
+            style = MaterialTheme.typography.headlineLarge, // Usar estilo del tema
+            fontWeight = FontWeight.Bold,
+            color = AccentGold, // Color de acento para el título
             textAlign = TextAlign.Center,
-            lineHeight = 50.sp // Añadimos altura de línea para evitar cortes
+            modifier = Modifier.padding(bottom = 64.dp) // Mayor espaciado inferior
         )
 
-        Spacer(Modifier.weight(0.5f))
-
+        // Contenedor para los botones de acción
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Botón para el modo multijugador
             Button(
                 onClick = onStartGame,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
-                shape = RoundedCornerShape(32.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp)
+                    .height(56.dp), // Altura estándar de Material
+                shape = RoundedCornerShape(16.dp) // Bordes redondeados más sutiles
             ) {
                 Text(
-                    text = "Empezar Partida Multijugador",
-                    fontSize = 18.sp, // Tamaño de fuente ligeramente reducido
-                    fontWeight = FontWeight.Bold,
-                    color = TextWhite,
-                    textAlign = TextAlign.Center
+                    text = "Partida Multijugador",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
+            // Botón para el modo un móvil
             Button(
                 onClick = onOneMobileMode,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
-                shape = RoundedCornerShape(32.dp),
-                contentPadding = PaddingValues(16.dp)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text(text = "Modo Un Móvil", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextWhite)
+                Text(
+                    text = "Modo Un Móvil",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            Button(
+            // Botón para ver las reglas (estilo secundario)
+            OutlinedButton(
                 onClick = onViewRules,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
-                shape = RoundedCornerShape(32.dp),
-                contentPadding = PaddingValues(16.dp)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text(text = "Ver Reglas", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextWhite)
+                Text(
+                    text = "Ver Reglas",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
-        Spacer(Modifier.weight(0.5f))
+        // Espaciador flexible para centrar
+        Spacer(Modifier.weight(1f))
     }
 }
 
@@ -102,3 +105,4 @@ fun MainMenuScreenPreview() {
         }
     }
 }
+
