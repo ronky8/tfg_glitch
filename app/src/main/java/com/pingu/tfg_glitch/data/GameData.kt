@@ -152,7 +152,8 @@ data class Player(
     var totalScore: Int = 0,
     var manualBonusPV: Int = 0,
     var activeMysteryId: String? = null,
-    var lastMysteryResult: String? = null
+    var lastMysteryResult: String? = null,
+    var cropsSoldThisMarketPhase: Int = 0 // [¡NUEVO!] Contador para la habilidad pasiva del Comerciante
 )
 
 data class MarketPrices(
@@ -211,7 +212,7 @@ val allMysteryEncounters = listOf<MysteryEncounter>(
     ),
     RandomEventEncounter(
         id = "random_lluvia_datos",
-        title = "Lluvia de Datos",
+        title = "Lluvía de Datos",
         description = "Una extraña lluvia de datos cósmicos baña tu granja. Las plantas reaccionan de forma extraña...",
         outcomes = listOf(
             Pair(MysteryOutcome("¡La lluvia ha sido beneficiosa! Ganas 2 monedas.", moneyChange = 2), 70),

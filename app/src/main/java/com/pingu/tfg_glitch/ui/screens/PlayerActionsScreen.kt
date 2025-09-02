@@ -521,60 +521,68 @@ private fun ActionButtons(
 ) {
     var showEngineerPassiveReroll by remember { mutableStateOf(false) }
 
-    AnimatedContent(targetState = playerState.rollPhase, label = "ActionButtonsAnimation") { phase ->
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            when (phase) {
-                0 -> {
-                    Button(onClick = onRoll, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                        Icon(Icons.Default.Casino, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                        Text("Tirar Dados")
-                    }
-                    // Botones de habilidades en la fase 0 para que siempre estén disponibles en el turno
-                    HabilityButtons(playerState, canPerformActions, onUseBotanistActive, onUseVisionaryActive)
-                }
-                1 -> {
-                    // Botones de reroll normal y confirmar
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onReroll, enabled = canPerformActions && !playerState.hasRerolled, modifier = Modifier.weight(1f).height(50.dp)) {
-                            Text("Relanzar")
-                        }
-                        Button(onClick = onConfirm, enabled = canPerformActions, modifier = Modifier.weight(1f).height(50.dp)) {
-                            Text("Confirmar")
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Botones de habilidades de los granjeros
+        if (canPerformActions && (playerState.granjero?.id == "botanica_mutante" || playerState.granjero?.id == "visionaria_pixel")) {
+            HabilityButtons(playerState, canPerformActions, onUseBotanistActive, onUseVisionaryActive)
+        }
+
+        AnimatedContent(targetState = playerState.rollPhase, label = "ActionButtonsAnimation") { phase ->
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                when (phase) {
+                    0 -> {
+                        Button(onClick = onRoll, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                            Icon(Icons.Default.Casino, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                            Text("Tirar Dados")
                         }
                     }
-                    // Habilidades del Ingeniero, Botánico y Visionario
-                    if (playerState.granjero?.id == "ingeniero_glitch") {
-                        Button(
-                            onClick = { showEngineerPassiveReroll = true },
-                            enabled = canPerformActions && !playerState.haUsadoPasivaIngeniero,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Usar Reroll Pasivo")
+                    1 -> {
+                        // Botones de reroll normal y confirmar
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = onReroll, enabled = canPerformActions && !playerState.hasRerolled, modifier = Modifier.weight(1f).height(50.dp)) {
+                                Text("Relanzar")
+                            }
+                            Button(onClick = onConfirm, enabled = canPerformActions, modifier = Modifier.weight(1f).height(50.dp)) {
+                                Text("Confirmar")
+                            }
                         }
-                        Button(
-                            onClick = onUseEngineerActive,
-                            enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Activar Habilidad (1⚡)")
+                        // Habilidades del Ingeniero
+                        if (playerState.granjero?.id == "ingeniero_glitch") {
+                            Button(
+                                onClick = { showEngineerPassiveReroll = true },
+                                enabled = canPerformActions && !playerState.haUsadoPasivaIngeniero,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Usar Reroll Pasivo")
+                            }
+                            Button(
+                                onClick = onUseEngineerActive,
+                                enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Activar Habilidad (1⚡)")
+                            }
                         }
                     }
-                    HabilityButtons(playerState, canPerformActions, onUseBotanistActive, onUseVisionaryActive)
-                }
-                2 -> {
-                    // Botón de resolver misterio (opcional)
-                    if (playerState.mysteryButtonsRemaining > 0) {
-                        Button(onClick = onStartMystery, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
-                            Text("Resolver Misterio (${playerState.mysteryButtonsRemaining})")
+                    2 -> {
+                        // Botón de resolver misterio (opcional)
+                        if (playerState.mysteryButtonsRemaining > 0) {
+                            Button(onClick = onStartMystery, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
+                                Text("Resolver Misterio (${playerState.mysteryButtonsRemaining})")
+                            }
                         }
-                    }
-                    // Botón para terminar el turno (siempre visible en la fase 2)
-                    Button(onClick = onEndTurn, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                        Text("Terminar Turno")
+                        // Botón para terminar el turno (siempre visible en la fase 2)
+                        Button(onClick = onEndTurn, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                            Text("Terminar Turno")
+                        }
                     }
                 }
             }

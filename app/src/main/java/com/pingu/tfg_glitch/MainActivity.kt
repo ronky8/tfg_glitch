@@ -101,12 +101,12 @@ fun AppNavigation(userDataStore: UserDataStore) {
     LaunchedEffect(game) {
         val currentGame = game
         // Lógica para mostrar pop-up de evento
-        if (currentGame?.lastEvent?.name != null && currentGame.lastEvent?.name != lastEventName) {
+        if (currentGame?.isStarted == true && currentGame.lastEvent?.name != null && currentGame.lastEvent?.name != lastEventName) {
             lastEventName = currentGame.lastEvent!!.name
             showEventDialog = true
         }
         // Lógica para mostrar pop-up de inicio de turno
-        if (currentGame != null && currentGame.currentPlayerTurnId == currentPlayerId) {
+        if (currentGame != null && currentGame.isStarted && currentGame.currentPlayerTurnId == currentPlayerId) {
             if (currentGame.roundNumber != lastRoundNumber) {
                 lastRoundNumber = currentGame.roundNumber
                 showTurnStartDialog = true

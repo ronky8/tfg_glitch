@@ -71,6 +71,8 @@ import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.material3.Surface
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ArrowDownward
 
 // Instancias de servicios.
 private val firestoreService = FirestoreService()
@@ -122,17 +124,13 @@ fun LobbyScreen(
         game?.hostPlayerId == currentPlayerId
     }
 
-    // Obtener la lista de jugadores ordenada por game.playerOrder si existe.
-    val orderedPlayers by remember(allPlayers, game?.playerOrder) {
-        val g = game
-        if (g?.playerOrder != null && g.playerOrder.isNotEmpty()) {
-            val playerMap = allPlayers.associateBy { it.id }
-            mutableStateOf(g.playerOrder.mapNotNull { playerMap[it] })
-        } else {
-            mutableStateOf(allPlayers)
+    // Función para mover un jugador en la lista local
+    val onMovePlayer: (Int, Int) -> Unit = { fromIndex, toIndex ->
+        if (fromIndex in playerList.indices && toIndex in playerList.indices) {
+            val playerToMove = playerList.removeAt(fromIndex)
+            playerList.add(toIndex, playerToMove)
         }
     }
-
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -163,19 +161,21 @@ fun LobbyScreen(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(24.dp),
+                        modifier = Modifier.padding(24.dp).fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = "Código de Partida:",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            textAlign = TextAlign.Center
                         )
                         Text(
                             text = currentGame.id,
                             style = MaterialTheme.typography.displayMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            textAlign = TextAlign.Center
                         )
                         IconButton(
                             onClick = {
@@ -199,22 +199,19 @@ fun LobbyScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Lista de jugadores con arrastrar y soltar si es el anfitrión.
+            // Lista de jugadores con botones para reordenar
             if (allPlayers.isNotEmpty()) {
                 Text(
                     text = "Jugadores (${allPlayers.size}/4)",
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
-                if (isHost) {
-                    ReorderablePlayerList(
-                        playerList = playerList,
-                        onMove = { from, to -> playerList.move(from, to) },
-                        hostPlayerId = game?.hostPlayerId
-                    )
-                } else {
-                    PlayerList(players = orderedPlayers, hostPlayerId = game?.hostPlayerId)
-                }
+                PlayerList(
+                    players = playerList,
+                    hostPlayerId = game?.hostPlayerId,
+                    isHost = isHost,
+                    onMovePlayer = onMovePlayer
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -244,105 +241,13 @@ fun LobbyScreen(
     }
 }
 
-// ========================================================================
-// --- Funciones para la Reordenación Nativa ---
-// ========================================================================
-
-fun <T> MutableList<T>.move(fromIndex: Int, toIndex: Int) {
-    if (fromIndex == toIndex) return
-    val element = this.removeAt(fromIndex)
-    this.add(toIndex, element)
-}
-
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ReorderablePlayerList(
-    playerList: MutableList<Player>,
-    onMove: (fromIndex: Int, toIndex: Int) -> Unit,
-    hostPlayerId: String?
+fun PlayerList(
+    players: List<Player>,
+    hostPlayerId: String?,
+    isHost: Boolean,
+    onMovePlayer: (fromIndex: Int, toIndex: Int) -> Unit
 ) {
-    val density = LocalDensity.current
-    val haptic = LocalHapticFeedback.current
-    var draggingItem by remember { mutableStateOf<Player?>(null) }
-    var dragOffset by remember { mutableStateOf(Offset.Zero) }
-    var displacedIndex by remember { mutableStateOf(-1) }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().height(300.dp),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        itemsIndexed(playerList, key = { _, player -> player.id }) { index, player ->
-            val isDragging = player == draggingItem
-            val zIndex = if (isDragging) 1f else 0f
-            val alpha = if (isDragging) 0.5f else 1f
-            val elevation = if (isDragging) 8.dp else 2.dp
-
-            val itemHeight = with(density) { 56.dp.toPx() }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .animateItemPlacement()
-                    .offset {
-                        IntOffset(x = 0, y = if (isDragging) dragOffset.y.roundToInt() else 0)
-                    }
-                    .graphicsLayer {
-                        this.alpha = alpha
-                    }
-                    .zIndex(zIndex)
-                    .pointerInput(player.id) { // CLAVE: Usamos el ID del jugador como clave
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                if (player.id != hostPlayerId) {
-                                    draggingItem = player
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                            },
-                            onDrag = { change, offset ->
-                                dragOffset += offset
-                                change.consume()
-                                draggingItem?.let {
-                                    val newDisplacedIndex = (index + (dragOffset.y / itemHeight).roundToInt())
-                                        .coerceIn(0, playerList.lastIndex)
-                                    if (newDisplacedIndex != displacedIndex) {
-                                        displacedIndex = newDisplacedIndex
-                                    }
-                                }
-                            },
-                            onDragEnd = {
-                                if (draggingItem != null) {
-                                    val finalIndex = (index + (dragOffset.y / itemHeight).roundToInt())
-                                        .coerceIn(0, playerList.lastIndex)
-                                    if (finalIndex != index) {
-                                        onMove(index, finalIndex)
-                                    }
-                                }
-                                draggingItem = null
-                                dragOffset = Offset.Zero
-                                displacedIndex = -1
-                            },
-                            onDragCancel = {
-                                draggingItem = null
-                                dragOffset = Offset.Zero
-                                displacedIndex = -1
-                            }
-                        )
-                    }
-            ) {
-                PlayerCardInLobby(
-                    player = player,
-                    rank = playerList.indexOf(player) + 1,
-                    hostPlayerId = hostPlayerId,
-                    elevation = elevation
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun PlayerList(players: List<Player>, hostPlayerId: String?) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth().height(300.dp),
         contentPadding = PaddingValues(16.dp),
@@ -353,8 +258,9 @@ fun PlayerList(players: List<Player>, hostPlayerId: String?) {
                 player = player,
                 rank = index + 1,
                 hostPlayerId = hostPlayerId,
-                elevation = 2.dp,
-                modifier = Modifier.fillMaxWidth()
+                isHost = isHost,
+                onMoveUp = { onMovePlayer(index, index - 1) },
+                onMoveDown = { onMovePlayer(index, index + 1) }
             )
         }
     }
@@ -365,12 +271,13 @@ fun PlayerCardInLobby(
     player: Player,
     rank: Int,
     hostPlayerId: String?,
-    elevation: Dp,
-    modifier: Modifier = Modifier,
+    isHost: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
 ) {
     ElevatedCard(
-        modifier = modifier.height(56.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = elevation)
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -394,6 +301,16 @@ fun PlayerCardInLobby(
             }
             if (player.id == hostPlayerId) {
                 Icon(Icons.Default.Star, contentDescription = "Anfitrión", tint = MaterialTheme.colorScheme.primary)
+            }
+            if (isHost && player.id != hostPlayerId) {
+                Row {
+                    IconButton(onClick = onMoveUp, enabled = rank > 1) {
+                        Icon(Icons.Default.ArrowUpward, contentDescription = "Subir")
+                    }
+                    IconButton(onClick = onMoveDown, enabled = rank < 4) {
+                        Icon(Icons.Default.ArrowDownward, contentDescription = "Bajar")
+                    }
+                }
             }
         }
     }

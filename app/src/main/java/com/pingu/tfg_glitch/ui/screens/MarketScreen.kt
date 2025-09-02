@@ -7,7 +7,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -41,6 +43,10 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
     val currentPlayer by firestoreService.getPlayer(currentPlayerId).collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Estado para el diálogo de venta
+    var showSellDialog by remember { mutableStateOf(false) }
+    var selectedCropForSale by remember { mutableStateOf<CultivoInventario?>(null) }
 
     // --- Estados Derivados ---
     val isMarketPhase by remember(game) { derivedStateOf { game?.roundPhase == "MARKET_PHASE" } }
@@ -103,14 +109,9 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                         inventory = inventoryMap,
                         marketPrices = currentMarketPrices,
                         enabled = isMarketPhase && !hasPlayerFinishedMarket,
-                        onSellCrop = { cropId, price ->
-                            coroutineScope.launch {
-                                val success = gameService.sellCrop(gameId, currentPlayerId, cropId, 1)
-                                snackbarHostState.showSnackbar(
-                                    if (success) "Vendiste 1 ${allCrops.find { it.id == cropId }?.nombre} por $price 💰."
-                                    else "Error al vender."
-                                )
-                            }
+                        onSellClick = { cropInventoryItem ->
+                            selectedCropForSale = cropInventoryItem
+                            showSellDialog = true
                         }
                     )
                 }
@@ -143,8 +144,14 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                     Button(
                         onClick = {
                             coroutineScope.launch {
+                                val bonusMoney = if(currentPlayer?.granjero?.id == "comerciante_sombrio") (currentPlayer?.cropsSoldThisMarketPhase ?: 0) / 2 else 0
                                 gameService.playerFinishedMarket(gameId, currentPlayerId)
-                                snackbarHostState.showSnackbar("Has terminado tus acciones en el Mercado.")
+                                val snackbarMessage = if (bonusMoney > 0) {
+                                    "Has terminado tus acciones en el Mercado. ¡Ganaste $bonusMoney💰 extra por la habilidad!"
+                                } else {
+                                    "Has terminado tus acciones en el Mercado."
+                                }
+                                snackbarHostState.showSnackbar(snackbarMessage)
                             }
                         },
                         enabled = !hasPlayerFinishedMarket,
@@ -157,6 +164,84 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                 }
             }
         }
+    }
+
+    // Diálogo de venta mejorado
+    if (showSellDialog && selectedCropForSale != null) {
+        val crop = selectedCropForSale!!
+        val maxQuantity = crop.cantidad
+        var quantityToSell by remember { mutableStateOf(1) }
+
+        AlertDialog(
+            onDismissRequest = { showSellDialog = false },
+            title = { Text("Vender ${crop.nombre}") },
+            text = {
+                Column {
+                    Text("Precio actual: ${
+                        when (crop.id) {
+                            "zanahoria" -> currentMarketPrices.zanahoria
+                            "trigo" -> currentMarketPrices.trigo
+                            "patata" -> currentMarketPrices.patata
+                            "tomateCubico" -> currentMarketPrices.tomateCubico
+                            "maizArcoiris" -> currentMarketPrices.maizArcoiris
+                            "brocoliCristal" -> currentMarketPrices.brocoliCristal
+                            "pimientoExplosivo" -> currentMarketPrices.pimientoExplosivo
+                            else -> 0
+                        }
+                    }💰")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Cantidad a vender:")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { if (quantityToSell > 1) quantityToSell-- }) {
+                            Icon(Icons.Default.Remove, contentDescription = "Restar")
+                        }
+                        Text("$quantityToSell", style = MaterialTheme.typography.headlineSmall)
+                        IconButton(onClick = { if (quantityToSell < maxQuantity) quantityToSell++ }) {
+                            Icon(Icons.Default.Add, contentDescription = "Sumar")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            val price = when (crop.id) {
+                                "zanahoria" -> currentMarketPrices.zanahoria
+                                "trigo" -> currentMarketPrices.trigo
+                                "patata" -> currentMarketPrices.patata
+                                "tomateCubico" -> currentMarketPrices.tomateCubico
+                                "maizArcoiris" -> currentMarketPrices.maizArcoiris
+                                "brocoliCristal" -> currentMarketPrices.brocoliCristal
+                                "pimientoExplosivo" -> currentMarketPrices.pimientoExplosivo
+                                else -> 0
+                            }
+                            val totalGanancia = (quantityToSell * price)
+
+                            val success = gameService.sellCrop(gameId, currentPlayerId, crop.id, quantityToSell, totalGanancia)
+                            if (success) {
+                                snackbarHostState.showSnackbar("Vendiste $quantityToSell ${crop.nombre} por $totalGanancia 💰.")
+                            } else {
+                                snackbarHostState.showSnackbar("Error al vender. Verifica tu inventario.")
+                            }
+                        }
+                        showSellDialog = false
+                    },
+                    enabled = quantityToSell > 0
+                ) {
+                    Text("Vender")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSellDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     // Diálogo para la habilidad del Comerciante Sombrío
@@ -218,7 +303,7 @@ private fun CombinedMarketAndInventoryView(
     inventory: Map<String, CultivoInventario>,
     marketPrices: MarketPrices,
     enabled: Boolean,
-    onSellCrop: (String, Int) -> Unit
+    onSellClick: (CultivoInventario) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -251,7 +336,11 @@ private fun CombinedMarketAndInventoryView(
                     }
                 }
                 ElevatedCard(
-                    onClick = { onSellCrop(crop.id, currentPrice) },
+                    onClick = {
+                        if (inventoryItem != null) {
+                            onSellClick(inventoryItem)
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = enabled && quantity > 0,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)

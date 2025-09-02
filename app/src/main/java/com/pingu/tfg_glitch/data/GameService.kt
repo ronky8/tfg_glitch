@@ -615,7 +615,7 @@ class GameService {
      * La función ahora calcula el precio de venta real basándose en el estado de la partida,
      * para asegurar que los eventos de mercado temporales se apliquen correctamente.
      */
-    suspend fun sellCrop(gameId: String, playerId: String, cropId: String, quantity: Int): Boolean {
+    suspend fun sellCrop(gameId: String, playerId: String, cropId: String, quantity: Int, totalEarned: Int): Boolean {
         val playerRef = playersCollection.document(playerId)
         val gameRef = gamesCollection.document(gameId)
 
@@ -631,38 +631,18 @@ class GameService {
                     throw Exception("Insufficient inventory")
                 }
 
-                // Calcular el precio de venta real, aplicando el evento temporal si está activo.
-                var marketPrice = when (cropId) {
-                    "zanahoria" -> game.marketPrices.zanahoria
-                    "trigo" -> game.marketPrices.trigo
-                    "patata" -> game.marketPrices.patata
-                    "tomateCubico" -> game.marketPrices.tomateCubico
-                    "maizArcoiris" -> game.marketPrices.maizArcoiris
-                    "brocoliCristal" -> game.marketPrices.brocoliCristal
-                    "pimientoExplosivo" -> game.marketPrices.pimientoExplosivo
-                    else -> 0
-                }
-
-                // Aplicar el efecto de Interferencia de Señal si está activo.
-                if (game.signalInterferenceActive) {
-                    marketPrice = max(1, marketPrice / 2)
-                }
-
-                var bonusMoney = 0
-                // Habilidad activa del comerciante
-                if(player.granjero?.id == "comerciante_sombrio" && player.haUsadoHabilidadActiva) {
-                    bonusMoney += quantity * 1
-                }
-                // Habilidad pasiva del comerciante
-                if(player.granjero?.id == "comerciante_sombrio" && quantity >= 2) {
-                    bonusMoney += (quantity / 2) * 1
-                }
-
                 inventoryItem.cantidad -= quantity
                 if (inventoryItem.cantidad == 0) {
                     player.inventario.remove(inventoryItem)
                 }
-                player.money += (quantity * marketPrice) + bonusMoney
+
+                player.money += totalEarned
+
+                // NEW: Increment the counter for the passive ability
+                if (player.granjero?.id == "comerciante_sombrio") {
+                    player.cropsSoldThisMarketPhase += quantity
+                }
+
                 transaction.set(playerRef, player)
             }.await()
             true
@@ -777,11 +757,27 @@ class GameService {
      */
     suspend fun playerFinishedMarket(gameId: String, playerId: String) {
         val gameRef = gamesCollection.document(gameId)
+        val playerRef = playersCollection.document(playerId)
+
         try {
             db.runTransaction { transaction ->
                 val game = transaction.get(gameRef).toObject<Game>()
-                if (game != null && !game.playersFinishedMarket.contains(playerId)) {
+                val player = transaction.get(playerRef).toObject<Player>()
+
+                if (game != null && player != null && !game.playersFinishedMarket.contains(playerId)) {
+                    // Aplicar la habilidad pasiva del Comerciante
+                    if (player.granjero?.id == "comerciante_sombrio") {
+                        val bonus = (player.cropsSoldThisMarketPhase) / 2
+                        if (bonus > 0) {
+                            player.money += bonus
+                        }
+                        // Resetear el contador
+                        player.cropsSoldThisMarketPhase = 0
+                    }
+
                     game.playersFinishedMarket.add(playerId)
+
+                    transaction.set(playerRef, player)
                     transaction.set(gameRef, game)
                 }
             }.await()
@@ -955,7 +951,8 @@ class GameService {
                             haUsadoHabilidadActiva = false,
                             mysteryButtonsRemaining = 0,
                             activeMysteryId = null,
-                            lastMysteryResult = null
+                            lastMysteryResult = null,
+                            cropsSoldThisMarketPhase = 0 // Resetear el contador
                         )
                     )
                 }
@@ -969,7 +966,8 @@ class GameService {
                 game.playersFinishedMarket.clear()
                 game.roundNumber += 1
                 game.roundObjective = allRoundObjectives.random()
-                game.currentPlayerTurnId = game.playerOrder.getOrNull(game.roundNumber % game.playerOrder.size)
+                val nextStartingPlayerIndex = (game.roundNumber - 1) % game.playerOrder.size
+                game.currentPlayerTurnId = game.playerOrder.getOrNull(nextStartingPlayerIndex)
                 transaction.set(gameRef, game)
 
                 true
@@ -1135,7 +1133,8 @@ class GameService {
                 game.playersFinishedMarket.clear()
                 game.roundNumber += 1
                 game.roundObjective = allRoundObjectives.random()
-                game.currentPlayerTurnId = game.playerOrder.firstOrNull() // Director de juego
+                val nextStartingPlayerIndex = (game.roundNumber - 1) % game.playerOrder.size
+                game.currentPlayerTurnId = game.playerOrder.getOrNull(nextStartingPlayerIndex)
                 transaction.set(gameRef, game)
 
                 true
@@ -1382,19 +1381,32 @@ class GameService {
                             feedback = "Necesitas ${objective.targetValue} de $cropName. Tienes $specificCropCount."
                         }
                     }
+                    "mutant_harvest" -> {
+                        val mutantCropsHarvested = player.inventario.filter { crop ->
+                            allCrops.find { it.id == crop.id }?.tipo == TipoCultivo.MUTADO
+                        }.sumOf { it.cantidad }
+                        if (mutantCropsHarvested >= objective.targetValue) { canClaim = true }
+                        else { feedback = "Necesitas cosechar ${objective.targetValue} cultivos mutantes. Llevas $mutantCropsHarvested." }
+                    }
                     "dice_roll_all_same" -> {
                         val firstSymbol = player.currentDiceRoll.firstOrNull()
                         val allSame = firstSymbol != null && player.currentDiceRoll.all { it == firstSymbol }
                         if (allSame && player.currentDiceRoll.isNotEmpty()) { canClaim = true }
                         else { feedback = "Necesitas una tirada de 4 dados con el mismo símbolo." }
                     }
+                    "energy_count" -> {
+                        if (player.glitchEnergy >= objective.targetValue) { canClaim = true }
+                        else { feedback = "Necesitas ${objective.targetValue} de Energía Glitch. Tienes ${player.glitchEnergy}." }
+                    }
                     "plant_count" -> {
-                        // El seguimiento es manual. Asumimos honestidad del jugador.
                         canClaim = true
                         feedback = "Objetivo de ronda reclamado."
                     }
                     "sell_count" -> {
-                        // Similar a "plant_count", el seguimiento es manual.
+                        canClaim = true
+                        feedback = "Objetivo de ronda reclamado."
+                    }
+                    "sell_mutant_count" -> {
                         canClaim = true
                         feedback = "Objetivo de ronda reclamado."
                     }
@@ -1402,6 +1414,16 @@ class GameService {
                         val hasRolledSpecificDice = player.currentDiceRoll.any { it.name == objective.targetCropId }
                         if (hasRolledSpecificDice) { canClaim = true }
                         else { feedback = "Debes sacar un dado de Energía (⚡) en tu tirada." }
+                    }
+                    "money_gain" -> {
+                        canClaim = true
+                        feedback = "Objetivo de ronda reclamado."
+                    }
+                    "dice_roll_all_same" -> {
+                        val firstSymbol = player.currentDiceRoll.firstOrNull()
+                        val allSame = firstSymbol != null && player.currentDiceRoll.all { it == firstSymbol }
+                        if (allSame && player.currentDiceRoll.isNotEmpty()) { canClaim = true }
+                        else { feedback = "Necesitas una tirada de 4 dados con el mismo símbolo." }
                     }
                     else -> feedback = "Tipo de objetivo desconocido."
                 }
