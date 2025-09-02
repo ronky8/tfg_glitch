@@ -5,12 +5,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.pingu.tfg_glitch.data.*
 import com.pingu.tfg_glitch.ui.components.PlayerInfoCard
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import com.pingu.tfg_glitch.ui.theme.getIconForCrop
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -177,18 +178,22 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
             title = { Text("Vender ${crop.nombre}") },
             text = {
                 Column {
-                    Text("Precio actual: ${
-                        when (crop.id) {
-                            "zanahoria" -> currentMarketPrices.zanahoria
-                            "trigo" -> currentMarketPrices.trigo
-                            "patata" -> currentMarketPrices.patata
-                            "tomateCubico" -> currentMarketPrices.tomateCubico
-                            "maizArcoiris" -> currentMarketPrices.maizArcoiris
-                            "brocoliCristal" -> currentMarketPrices.brocoliCristal
-                            "pimientoExplosivo" -> currentMarketPrices.pimientoExplosivo
-                            else -> 0
-                        }
-                    }💰")
+                    val price = when (crop.id) {
+                        "zanahoria" -> currentMarketPrices.zanahoria
+                        "trigo" -> currentMarketPrices.trigo
+                        "patata" -> currentMarketPrices.patata
+                        "tomateCubico" -> currentMarketPrices.tomateCubico
+                        "maizArcoiris" -> currentMarketPrices.maizArcoiris
+                        "brocoliCristal" -> currentMarketPrices.brocoliCristal
+                        "pimientoExplosivo" -> currentMarketPrices.pimientoExplosivo
+                        else -> 0
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Precio actual: $price")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(Icons.Default.Paid, contentDescription = "Moneda", modifier = Modifier.size(16.dp))
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Cantidad a vender:")
                     Row(
@@ -349,22 +354,33 @@ private fun CombinedMarketAndInventoryView(
                         modifier = Modifier
                             .padding(12.dp)
                             .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // Nombre del cultivo y cantidad
+                        // Icono del cultivo
+                        Icon(
+                            imageVector = getIconForCrop(crop.id),
+                            contentDescription = crop.nombre,
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        // Cantidad en inventario
                         Text(
-                            text = "${crop.nombre.take(1).uppercase()} x${quantity}",
+                            text = "x$quantity",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
-                        // Precio del cultivo (grande)
-                        Text(
-                            text = "$currentPrice 💰",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.height(8.dp))
+                        // Precio del cultivo
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "$currentPrice",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(Icons.Default.Paid, contentDescription = "Moneda", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }

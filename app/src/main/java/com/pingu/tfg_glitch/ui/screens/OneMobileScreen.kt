@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.pingu.tfg_glitch.data.*
@@ -30,7 +31,7 @@ private val gameService = GameService()
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OneMobileScreen(
-    onBackToMainMenu: () -> Unit
+    onAttemptExit: () -> Unit
 ) {
     // --- Estados ---
     var gameId by remember { mutableStateOf<String?>(null) }
@@ -71,7 +72,7 @@ fun OneMobileScreen(
             TopAppBar(
                 title = { Text("Director de Juego") },
                 navigationIcon = {
-                    IconButton(onClick = onBackToMainMenu) {
+                    IconButton(onClick = onAttemptExit) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 }
@@ -92,9 +93,9 @@ fun OneMobileScreen(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text("Error", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.error)
-                    Text(errorMessage!!, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text(errorMessage!!, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = onBackToMainMenu) { Text("Volver al Menú") }
+                    Button(onClick = onAttemptExit) { Text("Volver al Menú") }
                 }
             }
             else -> {
@@ -106,6 +107,23 @@ fun OneMobileScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    item {
+                        game?.let {
+                            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Ronda: ${it.roundNumber}",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
                     item { MarketPricesCard(game?.marketPrices) }
                     item { GlitchEventCard(game?.lastEvent) }
                     item {
@@ -265,8 +283,7 @@ private fun ActionButtons(onActivateMystery: () -> Unit, onAdvanceRound: () -> U
 fun OneMobileScreenPreview() {
     GranjaGlitchAppTheme {
         Surface {
-            OneMobileScreen(onBackToMainMenu = {})
+            OneMobileScreen(onAttemptExit = {})
         }
     }
 }
-

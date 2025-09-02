@@ -3,6 +3,7 @@ package com.pingu.tfg_glitch
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -16,10 +17,15 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.pingu.tfg_glitch.data.Game
 import com.pingu.tfg_glitch.data.GameService
+import com.pingu.tfg_glitch.data.SoundManager
 import com.pingu.tfg_glitch.data.UserDataStore
 import com.pingu.tfg_glitch.ui.screens.*
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
@@ -32,6 +38,8 @@ class MainActivity : ComponentActivity() {
     private val userDataStore by lazy { UserDataStore(this) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Inicializamos el SoundManager una sola vez
+        SoundManager.initialize(this)
         setContent {
             GranjaGlitchAppTheme(selectedTheme = "TierraGlitch") {
                 Surface(
@@ -42,6 +50,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Liberamos los recursos del SoundManager cuando la app se destruye
+        SoundManager.release()
     }
 }
 
@@ -63,12 +77,71 @@ fun AppNavigation(userDataStore: UserDataStore) {
     var lastEventName by rememberSaveable { mutableStateOf<String?>(null) }
     var showEventDialog by rememberSaveable { mutableStateOf(false) }
 
-    // NUEVO: Estado para el pop-up de inicio de turno y el ID de turno del que se mostró
     var showTurnStartDialog by rememberSaveable { mutableStateOf(false) }
     var lastTurnStartPlayerId by rememberSaveable { mutableStateOf<String?>(null) }
     var lastRoundNumber by rememberSaveable { mutableStateOf(-1) }
 
+    var showKickedDialog by remember { mutableStateOf(false) }
+    var showExitOneMobileDialog by remember { mutableStateOf(false) } // Nuevo estado para el diálogo de salida
+
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // --- MANEJO DEL BOTÓN DE RETROCESO ---
+    BackHandler(enabled = currentScreen != "mainMenu" && currentScreen != "loading") {
+        when (currentScreen) {
+            "multiplayerMenu", "rules" -> currentScreen = "mainMenu"
+            "oneMobileMode" -> showExitOneMobileDialog = true // Mostrar diálogo en lugar de salir
+            "createGame", "joinGame" -> currentScreen = "multiplayerMenu"
+            "lobby", "finalScore" -> {
+                coroutineScope.launch {
+                    userDataStore.clearSession()
+                    currentGameId = null
+                    currentPlayerId = null
+                    currentScreen = "mainMenu"
+                }
+            }
+            "game" -> { } // Deshabilitado para no salir de la partida por error
+        }
+    }
+    // --- FIN MANEJO DEL BOTÓN DE RETROCESO ---
+
+    // --- LÓGICA DE AUDIO ---
+    var currentMusicType by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(currentScreen) {
+        val newMusicType = when (currentScreen) {
+            "game", "oneMobileMode", "finalScore" -> "game"
+            "loading" -> null // No cambiar la música mientras carga
+            else -> "menu"
+        }
+
+        if (newMusicType != null && newMusicType != currentMusicType) {
+            currentMusicType = newMusicType
+            if (newMusicType == "game") {
+                SoundManager.playGameMusic(context)
+            } else {
+                SoundManager.playMenuMusic(context)
+            }
+        }
+    }
+
+    // Gestionar la pausa/reanudación de la música con el ciclo de vida de la app
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> SoundManager.pauseMusic()
+                Lifecycle.Event.ON_RESUME -> SoundManager.resumeMusic()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    // --- FIN LÓGICA DE AUDIO ---
 
     LaunchedEffect(Unit) {
         val session = userDataStore.readSession()
@@ -89,7 +162,6 @@ fun AppNavigation(userDataStore: UserDataStore) {
         }
     }
 
-    // Escucha los eventos globales para mostrar un pop-up
     val game by remember(currentGameId) {
         if (currentGameId != null) {
             gameService.getGame(currentGameId!!)
@@ -111,6 +183,10 @@ fun AppNavigation(userDataStore: UserDataStore) {
                 lastRoundNumber = currentGame.roundNumber
                 showTurnStartDialog = true
             }
+        }
+        // Lógica para detectar si el jugador ha sido expulsado
+        if (currentGame != null && currentPlayerId != null && currentGame.playerIds.isNotEmpty() && !currentGame.playerIds.contains(currentPlayerId)) {
+            showKickedDialog = true
         }
     }
 
@@ -201,10 +277,8 @@ fun AppNavigation(userDataStore: UserDataStore) {
         }
         "oneMobileMode" -> {
             OneMobileScreen(
-                onBackToMainMenu = {
-                    currentGameIdState.value = null
-                    currentPlayerIdState.value = null
-                    currentScreenState.value = "mainMenu"
+                onAttemptExit = {
+                    showExitOneMobileDialog = true
                 }
             )
         }
@@ -234,6 +308,61 @@ fun AppNavigation(userDataStore: UserDataStore) {
         }
     }
 
+    // --- DIÁLOGOS GLOBALES ---
+
+    if (showExitOneMobileDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitOneMobileDialog = false },
+            title = { Text("¿Salir de la partida?") },
+            text = { Text("Se perderá el progreso. ¿Estás seguro de que quieres volver al menú principal?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            if (currentGameId != null) {
+                                gameService.cleanUpGameData(currentGameId!!)
+                            }
+                            currentGameId = null
+                            currentPlayerId = null
+                            showExitOneMobileDialog = false
+                            currentScreen = "mainMenu"
+                        }
+                    }
+                ) {
+                    Text("Confirmar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitOneMobileDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showKickedDialog) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Has sido eliminado de la partida") },
+            text = { Text("El anfitrión te ha eliminado de la partida. Serás devuelto al menú principal.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            userDataStore.clearSession()
+                            currentGameId = null
+                            currentPlayerId = null
+                            showKickedDialog = false
+                            currentScreen = "mainMenu"
+                        }
+                    }
+                ) {
+                    Text("Aceptar")
+                }
+            }
+        )
+    }
+
     if (showEventDialog && currentGameId != null) {
         val currentGame = game
         if (currentGame != null) {
@@ -249,7 +378,7 @@ fun AppNavigation(userDataStore: UserDataStore) {
             )
         }
     }
-    // NUEVO: Diálogo de inicio de turno, movido aquí para controlar su estado a nivel global
+
     if (showTurnStartDialog && game?.currentPlayerTurnId == currentPlayerId) {
         AlertDialog(
             onDismissRequest = { showTurnStartDialog = false },
@@ -292,25 +421,33 @@ fun GameScreen(
             NavigationBar {
                 NavigationBarItem(
                     selected = selectedGameScreen == "actions",
-                    onClick = { selectedGameScreen = "actions" },
+                    onClick = {
+                        selectedGameScreen = "actions"
+                    },
                     icon = { Icon(Icons.Filled.Casino, contentDescription = "Acciones") },
                     label = { Text("Acciones") }
                 )
                 NavigationBarItem(
                     selected = selectedGameScreen == "market",
-                    onClick = { selectedGameScreen = "market" },
+                    onClick = {
+                        selectedGameScreen = "market"
+                    },
                     icon = { Icon(Icons.Filled.Storefront, contentDescription = "Mercado") },
                     label = { Text("Mercado") }
                 )
                 NavigationBarItem(
                     selected = selectedGameScreen == "objectives",
-                    onClick = { selectedGameScreen = "objectives" },
+                    onClick = {
+                        selectedGameScreen = "objectives"
+                    },
                     icon = { Icon(Icons.Filled.WorkspacePremium, contentDescription = "Objetivos") },
                     label = { Text("Objetivos") }
                 )
                 NavigationBarItem(
                     selected = selectedGameScreen == "players",
-                    onClick = { selectedGameScreen = "players" },
+                    onClick = {
+                        selectedGameScreen = "players"
+                    },
                     icon = { Icon(Icons.Filled.Groups, contentDescription = "Jugadores") },
                     label = { Text("Jugadores") }
                 )
@@ -333,3 +470,4 @@ fun GameScreen(
         }
     }
 }
+

@@ -127,7 +127,8 @@ class GameService {
     }
 
     /**
-     * Creates a new game and a single player for "One Mobile Mode".
+     * [CORREGIDO] Creates a new game and a single player for "One Mobile Mode".
+     * Ahora inicializa 'playerOrder' y otros estados de la partida correctamente.
      */
     suspend fun createOneMobileGame(): Pair<String, String> {
         val gameId = generateGameCode()
@@ -160,6 +161,9 @@ class GameService {
                 game.hostPlayerId = playerId
                 game.currentPlayerTurnId = playerId
                 game.roundPhase = "PLAYER_ACTIONS"
+                game.playerOrder.add(playerId) // <-- ¡LA CORRECCIÓN CLAVE!
+                game.isStarted = true
+                game.roundNumber = 1
                 transaction.set(gameRef, game)
             }
         }.await()
@@ -352,6 +356,44 @@ class GameService {
         }
     }
 
+    /**
+     * [¡NUEVO!] Permite al anfitrión añadir o quitar cultivos del inventario de un jugador.
+     */
+    suspend fun adjustPlayerInventory(playerId: String, cropId: String, quantityDelta: Int): Boolean {
+        val playerRef = playersCollection.document(playerId)
+        return try {
+            db.runTransaction { transaction ->
+                val player = transaction.get(playerRef).toObject<Player>()
+                    ?: throw Exception("Player not found in transaction")
+
+                val existingCrop = player.inventario.find { it.id == cropId }
+                if (existingCrop != null) {
+                    existingCrop.cantidad = max(0, existingCrop.cantidad + quantityDelta)
+                    if (existingCrop.cantidad == 0) {
+                        player.inventario.removeIf { it.id == cropId }
+                    }
+                } else if (quantityDelta > 0) {
+                    val cropDetails = allCrops.find { it.id == cropId }
+                        ?: throw Exception("Crop details not found for ID: $cropId")
+                    val newCrop = CultivoInventario(
+                        id = cropDetails.id,
+                        nombre = cropDetails.nombre,
+                        cantidad = quantityDelta,
+                        valorVentaBase = cropDetails.valorVentaBase,
+                        pvFinalJuego = cropDetails.pvFinalJuego
+                    )
+                    player.inventario.add(newCrop)
+                }
+                transaction.set(playerRef, player)
+                null // Transacción completada
+            }.await()
+            true
+        } catch (e: Exception) {
+            Log.e("GameService", "Error adjusting inventory for player $playerId: ${e.message}", e)
+            false
+        }
+    }
+
 
     /**
      * Updates the name of a player by their ID.
@@ -419,10 +461,51 @@ class GameService {
 
 
     /**
-     * Deletes a player by their ID.
+     * [¡NUEVO!] Elimina a un jugador de la partida de forma robusta.
+     * Esta función ahora necesita el gameId para actualizar el estado de la partida.
      */
-    suspend fun deletePlayer(playerId: String) {
-        playersCollection.document(playerId).delete().await()
+    suspend fun deletePlayerFromGame(gameId: String, playerId: String) {
+        val gameRef = gamesCollection.document(gameId)
+        val playerRef = playersCollection.document(playerId)
+
+        db.runTransaction { transaction ->
+            val game = transaction.get(gameRef).toObject<Game>()
+                ?: throw Exception("Game not found during player deletion.")
+            val playerToDelete = transaction.get(playerRef).toObject<Player>()
+                ?: throw Exception("Player not found during deletion.")
+
+            // 1. Eliminar al jugador de todas las listas de la partida
+            game.playerIds.remove(playerId)
+            game.playerOrder.remove(playerId)
+            game.playersFinishedTurn.remove(playerId)
+            game.playersFinishedMarket.remove(playerId)
+            game.claimedObjectivesByPlayer.entries.removeIf { it.value == playerId }
+
+            // 2. Comprobar si hay que cambiar de turno
+            if (game.currentPlayerTurnId == playerId) {
+                if (game.playerOrder.isNotEmpty()) {
+                    val currentIndex = game.playerOrder.indexOf(playerId) // Será -1 si ya se ha borrado
+                    val nextIndex = if (currentIndex != -1) (currentIndex) % game.playerOrder.size else 0
+                    game.currentPlayerTurnId = game.playerOrder[nextIndex]
+                } else {
+                    game.currentPlayerTurnId = null
+                }
+            }
+
+            // 3. Comprobar si hay que cambiar de anfitrión
+            if (game.hostPlayerId == playerId) {
+                game.hostPlayerId = game.playerOrder.firstOrNull()
+            }
+
+            // 4. Si ya no quedan jugadores, marcar la partida como terminada
+            if (game.playerIds.isEmpty()) {
+                game.hasGameEnded = true
+            }
+
+            // 5. Guardar los cambios en la partida y eliminar al jugador
+            transaction.set(gameRef, game)
+            transaction.delete(playerRef)
+        }.await()
     }
 
     /**
@@ -903,6 +986,9 @@ class GameService {
                     )
                 )
 
+                // [CORRECCIÓN DEL BUG] Asignar siempre los nuevos precios base
+                currentPrices = newMarketPrices
+
                 // Generate new round event and apply its effects
                 val playersWithGlitchEnergy = playersInGame.filter { it.glitchEnergy > 0 }
                 if (Random.nextDouble() < 0.60 && playersWithGlitchEnergy.isNotEmpty()) {
@@ -978,7 +1064,8 @@ class GameService {
     }
 
     /**
-     * Advances the game to the next round specifically for "One Mobile Mode".
+     * [CORREGIDO] Advances the game to the next round specifically for "One Mobile Mode".
+     * Se alinea con la lógica de 'advanceRound' para mayor consistencia.
      */
     suspend fun advanceOneMobileRound(gameId: String): Boolean {
         val gameRef = gamesCollection.document(gameId)
@@ -1071,6 +1158,9 @@ class GameService {
                     )
                 )
 
+                // [CORRECCIÓN DEL BUG] Asignar siempre los nuevos precios base
+                currentPrices = newMarketPrices
+
                 // Generate new round event and apply its effects
                 val playersWithGlitchEnergy = playersInGame.filter { it.glitchEnergy > 0 }
                 if (Random.nextDouble() < 0.60 && playersWithGlitchEnergy.isNotEmpty()) {
@@ -1119,7 +1209,8 @@ class GameService {
                             haUsadoHabilidadActiva = false,
                             mysteryButtonsRemaining = 0,
                             activeMysteryId = null,
-                            lastMysteryResult = null
+                            lastMysteryResult = null,
+                            cropsSoldThisMarketPhase = 0
                         )
                     )
                 }
@@ -1449,3 +1540,4 @@ class GameService {
         }
     }
 }
+

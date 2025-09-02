@@ -45,6 +45,9 @@ fun PlayerManagementScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showEndGameDialog by remember { mutableStateOf(false) }
+    // [CORREGIDO] Estado para mostrar el diálogo de gestión de inventario. Guarda el ID del jugador a editar.
+    var playerToManageInventoryId by remember { mutableStateOf<String?>(null) }
+
 
     // --- Estados Derivados ---
     val isHost by remember(game, currentPlayerId) {
@@ -99,9 +102,10 @@ fun PlayerManagementScreen(
                                     if (success) snackbarHostState.showSnackbar("Recursos de ${player.name} ajustados.")
                                 }
                             },
+                            onManageInventory = { playerToManageInventoryId = player.id },
                             onDeletePlayer = {
                                 coroutineScope.launch {
-                                    gameService.deletePlayer(player.id)
+                                    gameService.deletePlayerFromGame(gameId, player.id)
                                     snackbarHostState.showSnackbar("${player.name} ha sido eliminado.")
                                 }
                             }
@@ -128,6 +132,24 @@ fun PlayerManagementScreen(
             }
         }
     }
+
+    // [CORREGIDO] Diálogo para gestionar el inventario de un jugador.
+    // Se busca la versión más reciente del jugador desde 'allPlayers' para asegurar que la UI se recompone.
+    playerToManageInventoryId?.let { playerId ->
+        val freshPlayer = allPlayers.find { it.id == playerId }
+        if (freshPlayer != null) {
+            InventoryManagementDialog(
+                player = freshPlayer,
+                onDismiss = { playerToManageInventoryId = null },
+                onAdjustCrop = { cropId, delta ->
+                    coroutineScope.launch {
+                        gameService.adjustPlayerInventory(freshPlayer.id, cropId, delta)
+                    }
+                }
+            )
+        }
+    }
+
 
     // Diálogo de fin de partida
     if (showEndGameDialog) {
@@ -184,6 +206,7 @@ private fun PlayerCard(
     isCurrentPlayer: Boolean,
     onAdjustPV: (Int) -> Unit,
     onAdjustResources: (Int, Int) -> Unit,
+    onManageInventory: () -> Unit,
     onDeletePlayer: () -> Unit
 ) {
     val context = LocalContext.current
@@ -259,6 +282,18 @@ private fun PlayerCard(
                     onRemove = { onAdjustPV(-1) },
                     icon = Icons.Default.Star
                 )
+
+                // Botón para gestionar inventario
+                Button(
+                    onClick = onManageInventory,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                ) {
+                    Icon(Icons.Default.Inventory, contentDescription = "Inventario")
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text("Gestionar Inventario", color = MaterialTheme.colorScheme.onTertiaryContainer)
+                }
+
 
                 // Botón de eliminar
                 if (!isCurrentPlayer) { // El anfitrión no se puede eliminar a sí mismo
@@ -361,6 +396,50 @@ private fun EndGameDialog(
     )
 }
 
+// Diálogo para gestionar el inventario
+@Composable
+private fun InventoryManagementDialog(
+    player: Player,
+    onDismiss: () -> Unit,
+    onAdjustCrop: (cropId: String, delta: Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Inventario de ${player.name}") },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(allCrops) { crop ->
+                    val currentAmount = player.inventario.find { it.id == crop.id }?.cantidad ?: 0
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("${crop.nombre}: $currentAmount", modifier = Modifier.weight(1f))
+                        Row {
+                            IconButton(onClick = { onAdjustCrop(crop.id, -1) }, enabled = currentAmount > 0) {
+                                Icon(Icons.Default.Remove, "Quitar")
+                            }
+                            IconButton(onClick = { onAdjustCrop(crop.id, 1) }) {
+                                Icon(Icons.Default.Add, "Añadir")
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
+}
+
+
 // ========================================================================
 // --- Preview ---
 // ========================================================================
@@ -374,3 +453,4 @@ fun PlayerManagementScreenPreview() {
         }
     }
 }
+

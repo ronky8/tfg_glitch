@@ -10,7 +10,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.pingu.tfg_glitch.ui.theme.AccentGold
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
 
@@ -34,11 +33,11 @@ fun MainMenuScreen(
         // Título de la aplicación
         Text(
             text = "Granja Glitch",
-            style = MaterialTheme.typography.headlineLarge, // Usar estilo del tema
+            style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
-            color = AccentGold, // Color de acento para el título
+            color = AccentGold,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(bottom = 64.dp) // Mayor espaciado inferior
+            modifier = Modifier.padding(bottom = 64.dp)
         )
 
         // Contenedor para los botones de acción
@@ -51,8 +50,8 @@ fun MainMenuScreen(
                 onClick = onStartGame,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp), // Altura estándar de Material
-                shape = RoundedCornerShape(16.dp) // Bordes redondeados más sutiles
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
                 Text(
                     text = "Partida Multijugador",
@@ -105,4 +104,3 @@ fun MainMenuScreenPreview() {
         }
     }
 }
-
