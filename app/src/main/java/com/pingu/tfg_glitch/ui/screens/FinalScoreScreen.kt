@@ -13,11 +13,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.pingu.tfg_glitch.data.*
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import com.pingu.tfg_glitch.ui.theme.getIconForCoin
+import com.pingu.tfg_glitch.ui.theme.getIconForEnergy
+import com.pingu.tfg_glitch.ui.theme.getIconForPV
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -38,7 +42,6 @@ fun FinalScoreScreen(
     onBackToMainMenu: () -> Unit
 ) {
     // --- Estados ---
-    val game by gameService.getGame(gameId).collectAsState(initial = null)
     val allPlayers by firestoreService.getPlayersInGame(gameId).collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
 
@@ -50,14 +53,12 @@ fun FinalScoreScreen(
             } else {
                 allPlayers
                     .map { player ->
-                        // Calcular valor de cultivos no vendidos y sumarlo a las monedas
                         val totalUnsoldValue = player.inventario.sumOf { it.valorVentaBase.toLong() * it.cantidad.toLong() }
                         val unsoldCropsMoney = (totalUnsoldValue.toDouble() / 2.0).roundToInt()
                         val finalMoney = player.money + unsoldCropsMoney
 
-                        val moneyPV = finalMoney / 3 // CAMBIO: Ahora 3 monedas = 1 PV
-                        val energyPV = player.glitchEnergy // NUEVO: 1 Energía = 1 PV
-                        // Los objetivos ya no dan PV directo, su recompensa ya está en monedas y energía
+                        val moneyPV = finalMoney / 3
+                        val energyPV = player.glitchEnergy
                         val objectivesPV = 0
                         val totalPV = moneyPV + energyPV + objectivesPV + player.manualBonusPV
 
@@ -67,10 +68,11 @@ fun FinalScoreScreen(
                             energyPV = energyPV,
                             objectivesPV = objectivesPV,
                             totalPV = totalPV,
-                            unsoldCropsMoney = unsoldCropsMoney
+                            unsoldCropsMoney = unsoldCropsMoney,
+                            finalMoney = finalMoney
                         )
                     }
-                    .sortedByDescending { it.totalPV } // Ordenar de mayor a menor puntuación
+                    .sortedByDescending { it.totalPV }
             }
         }
     }
@@ -78,7 +80,6 @@ fun FinalScoreScreen(
     // --- UI Principal ---
     Scaffold(
         bottomBar = {
-            // Botón fijo en la parte inferior
             Button(
                 onClick = {
                     coroutineScope.launch {
@@ -147,27 +148,21 @@ fun FinalScoreScreen(
 // --- Sub-componentes de la pantalla ---
 // ========================================================================
 
-/**
- * Data class para encapsular los resultados de un jugador.
- */
 private data class PlayerScore(
     val player: Player,
     val moneyPV: Int,
-    val energyPV: Int, // NUEVO: PV por energía
+    val energyPV: Int,
     val objectivesPV: Int,
     val totalPV: Int,
-    val unsoldCropsMoney: Int
+    val unsoldCropsMoney: Int,
+    val finalMoney: Int
 )
 
-/**
- * Tarjeta que muestra la puntuación detallada de un jugador.
- */
 @Composable
 private fun PlayerScoreCard(score: PlayerScore, rank: Int) {
     val isWinner = rank == 1
     var revealed by remember { mutableStateOf(false) }
 
-    // Animación para la tarjeta del ganador
     val scale by animateFloatAsState(
         targetValue = if (isWinner && revealed) 1.05f else 1.0f,
         animationSpec = spring(
@@ -178,7 +173,7 @@ private fun PlayerScoreCard(score: PlayerScore, rank: Int) {
     )
 
     LaunchedEffect(Unit) {
-        delay(300L * rank) // Retraso escalonado para revelar las tarjetas
+        delay(300L * rank)
         revealed = true
     }
 
@@ -195,7 +190,6 @@ private fun PlayerScoreCard(score: PlayerScore, rank: Int) {
         colors = cardColors
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Fila del ranking y nombre
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -222,56 +216,99 @@ private fun PlayerScoreCard(score: PlayerScore, rank: Int) {
                 }
             }
 
-            // Puntuación total
-            Text(
-                text = "${score.totalPV} PV",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.End)
-            )
+            Row(
+                modifier = Modifier.align(Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${score.totalPV}",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    painter = getIconForPV(),
+                    contentDescription = "Puntos de Victoria",
+                    modifier = Modifier.size(32.dp).padding(start = 4.dp)
+                )
+            }
+
 
             Divider(modifier = Modifier.padding(vertical = 8.dp))
 
             // Desglose de puntos
-            ScoreDetailRow("Monedas", "${score.player.money + score.unsoldCropsMoney} 💰", "${score.moneyPV} PV")
-            if (score.unsoldCropsMoney > 0) {
-                ScoreDetailRow("Venta de cultivos", "(${score.player.inventario.sumOf { it.cantidad }} cultivos)", "+${score.unsoldCropsMoney} 💰")
+            ScoreDetailRow(label = "Monedas") {
+                ValuePointsPair(value = score.finalMoney, valueIcon = getIconForCoin(), points = score.moneyPV, pointsIcon = getIconForPV())
             }
-            ScoreDetailRow("Energía Glitch", "${score.player.glitchEnergy} ⚡", "${score.energyPV} PV") // NUEVO: Muestra PV por energía
-            ScoreDetailRow("Objetivos", "${score.player.objectivesClaimed.size}", "Reclamados")
+            if (score.unsoldCropsMoney > 0) {
+                ScoreDetailRow(label = "  ↳ Venta de cultivos") {
+                    ValuePointsPair(value = score.unsoldCropsMoney, valueIcon = getIconForCoin(), isBonus = true)
+                }
+            }
+            ScoreDetailRow(label = "Energía Glitch") {
+                ValuePointsPair(value = score.player.glitchEnergy, valueIcon = getIconForEnergy(), points = score.energyPV, pointsIcon = getIconForPV())
+            }
+            ScoreDetailRow(label = "Objetivos Reclamados") {
+                Text(text = "${score.player.objectivesClaimed.size}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            }
             if (score.player.manualBonusPV != 0) {
-                ScoreDetailRow("Ajuste Manual", "", "${score.player.manualBonusPV} PV")
+                ScoreDetailRow(label = "Ajuste Manual") {
+                    ValuePointsPair(points = score.player.manualBonusPV, pointsIcon = getIconForPV(), isBonus = score.player.manualBonusPV > 0)
+                }
             }
         }
     }
 }
 
-/**
- * Fila para mostrar un detalle de la puntuación.
- */
 @Composable
-private fun ScoreDetailRow(label: String, value: String, points: String) {
+private fun ScoreDetailRow(label: String, content: @Composable RowScope.() -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text = label, style = MaterialTheme.typography.bodyLarge)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (value.isNotEmpty()) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(end = 16.dp)
-                )
-            }
-            Text(
-                text = points,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold
-            )
+            content()
         }
+    }
+}
+
+@Composable
+private fun ValuePointsPair(
+    value: Int? = null,
+    valueIcon: Painter? = null,
+    points: Int? = null,
+    pointsIcon: Painter? = null,
+    isBonus: Boolean = false
+) {
+    val textStyle = MaterialTheme.typography.bodyLarge
+    val semiBoldStyle = textStyle.copy(fontWeight = FontWeight.SemiBold)
+
+    if (value != null && valueIcon != null) {
+        Text(
+            text = if (isBonus) "+$value" else "$value",
+            style = textStyle,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+        Icon(
+            painter = valueIcon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp).padding(horizontal = 4.dp),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+    }
+
+    if (points != null && pointsIcon != null) {
+        if(value != null) Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = if (isBonus) "+$points" else "$points",
+            style = semiBoldStyle
+        )
+        Icon(
+            painter = pointsIcon,
+            contentDescription = "PV",
+            modifier = Modifier.size(18.dp).padding(start = 4.dp)
+        )
     }
 }
 
@@ -289,3 +326,4 @@ fun FinalScoreScreenPreview() {
         }
     }
 }
+

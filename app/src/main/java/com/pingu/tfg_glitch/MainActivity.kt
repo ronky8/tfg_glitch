@@ -2,8 +2,8 @@ package com.pingu.tfg_glitch
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -38,15 +38,32 @@ class MainActivity : ComponentActivity() {
     private val userDataStore by lazy { UserDataStore(this) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Inicializamos el SoundManager una sola vez
         SoundManager.initialize(this)
+
         setContent {
+            val currentScreen = remember { mutableStateOf("loading") }
+            var backPressTriggered by remember { mutableStateOf(false) }
+
+            // El Back Handler ahora es más simple: solo notifica a AppNavigation
+            onBackPressedDispatcher.addCallback(this, true) {
+                when (currentScreen.value) {
+                    "game" -> { /* No hacer nada para evitar salir por accidente */ }
+                    "mainMenu" -> finish() // Solo cierra la app desde el menú principal
+                    else -> backPressTriggered = true // Para el resto de pantallas, delega la lógica
+                }
+            }
+
             GranjaGlitchAppTheme(selectedTheme = "TierraGlitch") {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(userDataStore)
+                    AppNavigation(
+                        userDataStore,
+                        currentScreen,
+                        backPressTriggered,
+                        onBackPressHandled = { backPressTriggered = false }
+                    )
                 }
             }
         }
@@ -54,7 +71,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Liberamos los recursos del SoundManager cuando la app se destruye
         SoundManager.release()
     }
 }
@@ -64,8 +80,12 @@ private val gameService = GameService()
 
 // Composable principal que maneja la navegación entre pantallas de alto nivel
 @Composable
-fun AppNavigation(userDataStore: UserDataStore) {
-    val currentScreenState = remember { mutableStateOf("loading") }
+fun AppNavigation(
+    userDataStore: UserDataStore,
+    currentScreenState: MutableState<String>,
+    backPressTriggered: Boolean,
+    onBackPressHandled: () -> Unit
+) {
     var currentScreen by currentScreenState
 
     val currentGameIdState = rememberSaveable { mutableStateOf<String?>(null) }
@@ -78,55 +98,36 @@ fun AppNavigation(userDataStore: UserDataStore) {
     var showEventDialog by rememberSaveable { mutableStateOf(false) }
 
     var showTurnStartDialog by rememberSaveable { mutableStateOf(false) }
-    var lastTurnStartPlayerId by rememberSaveable { mutableStateOf<String?>(null) }
     var lastRoundNumber by rememberSaveable { mutableStateOf(-1) }
 
     var showKickedDialog by remember { mutableStateOf(false) }
-    var showExitOneMobileDialog by remember { mutableStateOf(false) } // Nuevo estado para el diálogo de salida
+    var showExitOneMobileDialog by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // --- MANEJO DEL BOTÓN DE RETROCESO ---
-    BackHandler(enabled = currentScreen != "mainMenu" && currentScreen != "loading") {
-        when (currentScreen) {
-            "multiplayerMenu", "rules" -> currentScreen = "mainMenu"
-            "oneMobileMode" -> showExitOneMobileDialog = true // Mostrar diálogo en lugar de salir
-            "createGame", "joinGame" -> currentScreen = "multiplayerMenu"
-            "lobby", "finalScore" -> {
-                coroutineScope.launch {
-                    userDataStore.clearSession()
-                    currentGameId = null
-                    currentPlayerId = null
-                    currentScreen = "mainMenu"
-                }
+    // Lógica para manejar el evento de retroceso
+    LaunchedEffect(backPressTriggered) {
+        if (backPressTriggered) {
+            when (currentScreen) {
+                "oneMobileMode" -> showExitOneMobileDialog = true
+                "rules", "multiplayerMenu", "createGame", "joinGame" -> currentScreen = "mainMenu"
+                "lobby" -> { /* El botón de la TopAppBar ya gestiona esto */ }
+                "finalScore" -> { /* El botón de la TopAppBar ya gestiona esto */ }
             }
-            "game" -> { } // Deshabilitado para no salir de la partida por error
+            onBackPressHandled() // Resetea el trigger
         }
     }
-    // --- FIN MANEJO DEL BOTÓN DE RETROCESO ---
 
-    // --- LÓGICA DE AUDIO ---
-    var currentMusicType by remember { mutableStateOf<String?>(null) }
-
+    // Lógica de Audio
     LaunchedEffect(currentScreen) {
-        val newMusicType = when (currentScreen) {
-            "game", "oneMobileMode", "finalScore" -> "game"
-            "loading" -> null // No cambiar la música mientras carga
-            else -> "menu"
-        }
-
-        if (newMusicType != null && newMusicType != currentMusicType) {
-            currentMusicType = newMusicType
-            if (newMusicType == "game") {
-                SoundManager.playGameMusic(context)
-            } else {
-                SoundManager.playMenuMusic(context)
-            }
+        when (currentScreen) {
+            "game", "oneMobileMode", "finalScore" -> SoundManager.playGameMusic(context)
+            "loading" -> { /* No hacer nada */ }
+            else -> SoundManager.playMenuMusic(context)
         }
     }
 
-    // Gestionar la pausa/reanudación de la música con el ciclo de vida de la app
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -141,7 +142,6 @@ fun AppNavigation(userDataStore: UserDataStore) {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-    // --- FIN LÓGICA DE AUDIO ---
 
     LaunchedEffect(Unit) {
         val session = userDataStore.readSession()
@@ -172,19 +172,16 @@ fun AppNavigation(userDataStore: UserDataStore) {
 
     LaunchedEffect(game) {
         val currentGame = game
-        // Lógica para mostrar pop-up de evento
         if (currentGame?.isStarted == true && currentGame.lastEvent?.name != null && currentGame.lastEvent?.name != lastEventName) {
             lastEventName = currentGame.lastEvent!!.name
             showEventDialog = true
         }
-        // Lógica para mostrar pop-up de inicio de turno
         if (currentGame != null && currentGame.isStarted && currentGame.currentPlayerTurnId == currentPlayerId) {
             if (currentGame.roundNumber != lastRoundNumber) {
                 lastRoundNumber = currentGame.roundNumber
                 showTurnStartDialog = true
             }
         }
-        // Lógica para detectar si el jugador ha sido expulsado
         if (currentGame != null && currentPlayerId != null && currentGame.playerIds.isNotEmpty() && !currentGame.playerIds.contains(currentPlayerId)) {
             showKickedDialog = true
         }
@@ -213,7 +210,6 @@ fun AppNavigation(userDataStore: UserDataStore) {
         )
         "createGame" -> CreateGameScreen(
             onGameCreated = { gameId, hostPlayerId ->
-                Log.d("AppNavigation", "Game created: $gameId, Host Player: $hostPlayerId")
                 currentGameId = gameId
                 currentPlayerId = hostPlayerId
                 currentScreen = "lobby"
@@ -225,7 +221,6 @@ fun AppNavigation(userDataStore: UserDataStore) {
         )
         "joinGame" -> JoinGameScreen(
             onGameJoined = { gameId, playerId ->
-                Log.d("AppNavigation", "Joined game: $gameId, Current Player: $playerId")
                 currentGameId = gameId
                 currentPlayerId = playerId
                 currentScreen = "lobby"
@@ -242,9 +237,7 @@ fun AppNavigation(userDataStore: UserDataStore) {
                 LobbyScreen(
                     gameId = gameId,
                     currentPlayerId = playerId,
-                    onGameStarted = {
-                        currentScreen = "game"
-                    },
+                    onGameStarted = { currentScreen = "game" },
                     onBack = {
                         coroutineScope.launch {
                             userDataStore.clearSession()
@@ -263,22 +256,19 @@ fun AppNavigation(userDataStore: UserDataStore) {
                 GameScreen(
                     gameId = gameId,
                     currentPlayerId = playerId,
-                    onGameEnded = {
-                        Log.d("AppNavigation", "Game has ended. Navigating to FinalScoreScreen.")
-                        currentScreen = "finalScore"
-                    }
+                    onGameEnded = { currentScreen = "finalScore" }
                 )
             } else {
-                LaunchedEffect(Unit) {
-                    Log.w("AppNavigation", "gameId or playerId is null, returning to mainMenu.")
-                    currentScreenState.value = "mainMenu"
-                }
+                LaunchedEffect(Unit) { currentScreen = "mainMenu" }
             }
         }
         "oneMobileMode" -> {
             OneMobileScreen(
-                onAttemptExit = {
-                    showExitOneMobileDialog = true
+                onAttemptExit = { showExitOneMobileDialog = true },
+                onBackToMainMenu = {
+                    currentGameId = null
+                    currentPlayerId = null
+                    currentScreen = "mainMenu"
                 }
             )
         }
@@ -300,51 +290,16 @@ fun AppNavigation(userDataStore: UserDataStore) {
                     }
                 )
             } else {
-                LaunchedEffect(Unit) {
-                    Log.w("AppNavigation", "gameId is null in finalScore, returning to mainMenu.")
-                    currentScreenState.value = "mainMenu"
-                }
+                LaunchedEffect(Unit) { currentScreen = "mainMenu" }
             }
         }
-    }
-
-    // --- DIÁLOGOS GLOBALES ---
-
-    if (showExitOneMobileDialog) {
-        AlertDialog(
-            onDismissRequest = { showExitOneMobileDialog = false },
-            title = { Text("¿Salir de la partida?") },
-            text = { Text("Se perderá el progreso. ¿Estás seguro de que quieres volver al menú principal?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            if (currentGameId != null) {
-                                gameService.cleanUpGameData(currentGameId!!)
-                            }
-                            currentGameId = null
-                            currentPlayerId = null
-                            showExitOneMobileDialog = false
-                            currentScreen = "mainMenu"
-                        }
-                    }
-                ) {
-                    Text("Confirmar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExitOneMobileDialog = false }) {
-                    Text("Cancelar")
-                }
-            }
-        )
     }
 
     if (showKickedDialog) {
         AlertDialog(
             onDismissRequest = { },
             title = { Text("Has sido eliminado de la partida") },
-            text = { Text("El anfitrión te ha eliminado de la partida. Serás devuelto al menú principal.") },
+            text = { Text("El anfitrión te ha eliminado. Serás devuelto al menú principal.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -356,9 +311,29 @@ fun AppNavigation(userDataStore: UserDataStore) {
                             currentScreen = "mainMenu"
                         }
                     }
-                ) {
-                    Text("Aceptar")
-                }
+                ) { Text("Aceptar") }
+            }
+        )
+    }
+
+    if (showExitOneMobileDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitOneMobileDialog = false },
+            title = { Text("¿Salir del modo Director de Juego?") },
+            text = { Text("La partida actual se perderá. ¿Estás seguro?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExitOneMobileDialog = false
+                        // Limpiamos y navegamos
+                        currentGameId = null
+                        currentPlayerId = null
+                        currentScreen = "mainMenu"
+                    }
+                ) { Text("Salir") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitOneMobileDialog = false }) { Text("Cancelar") }
             }
         )
     }
@@ -378,14 +353,11 @@ fun AppNavigation(userDataStore: UserDataStore) {
             )
         }
     }
-
     if (showTurnStartDialog && game?.currentPlayerTurnId == currentPlayerId) {
         AlertDialog(
             onDismissRequest = { showTurnStartDialog = false },
             title = { Text(text = "¡Es tu turno!") },
-            text = {
-                Text(text = "Antes de tirar los dados, recuerda: \n\n1. Roba una carta del mazo principal.\n2. Coloca un marcador de crecimiento sobre cada uno de tus cultivos.\n3. Puedes plantar un cultivo normal de tu mano.")
-            },
+            text = { Text(text = "Antes de tirar los dados, recuerda: \n\n1. Roba una carta del mazo principal.\n2. Coloca un marcador de crecimiento sobre cada uno de tus cultivos.\n3. Puedes plantar un cultivo normal de tu mano.") },
             confirmButton = {
                 TextButton(onClick = { showTurnStartDialog = false }) {
                     Text("¡Entendido!")
@@ -395,7 +367,6 @@ fun AppNavigation(userDataStore: UserDataStore) {
     }
 }
 
-// Composable que contiene las pantallas de juego con la barra de navegación inferior
 @Composable
 fun GameScreen(
     gameId: String,
@@ -405,14 +376,9 @@ fun GameScreen(
     var selectedGameScreen by rememberSaveable { mutableStateOf("actions") }
     val game by gameService.getGame(gameId).collectAsState(initial = null)
 
-    // Observa el estado de la partida para navegar a la pantalla final
     LaunchedEffect(game) {
-        val gameData = game
-        if (gameData != null) {
-            if (gameData.hasGameEnded) {
-                Log.d("GameScreen", "Game hasEnded detected. Calling onGameEnded.")
-                onGameEnded()
-            }
+        if (game?.hasGameEnded == true) {
+            onGameEnded()
         }
     }
 
@@ -421,33 +387,25 @@ fun GameScreen(
             NavigationBar {
                 NavigationBarItem(
                     selected = selectedGameScreen == "actions",
-                    onClick = {
-                        selectedGameScreen = "actions"
-                    },
+                    onClick = { selectedGameScreen = "actions" },
                     icon = { Icon(Icons.Filled.Casino, contentDescription = "Acciones") },
                     label = { Text("Acciones") }
                 )
                 NavigationBarItem(
                     selected = selectedGameScreen == "market",
-                    onClick = {
-                        selectedGameScreen = "market"
-                    },
+                    onClick = { selectedGameScreen = "market" },
                     icon = { Icon(Icons.Filled.Storefront, contentDescription = "Mercado") },
                     label = { Text("Mercado") }
                 )
                 NavigationBarItem(
                     selected = selectedGameScreen == "objectives",
-                    onClick = {
-                        selectedGameScreen = "objectives"
-                    },
+                    onClick = { selectedGameScreen = "objectives" },
                     icon = { Icon(Icons.Filled.WorkspacePremium, contentDescription = "Objetivos") },
                     label = { Text("Objetivos") }
                 )
                 NavigationBarItem(
                     selected = selectedGameScreen == "players",
-                    onClick = {
-                        selectedGameScreen = "players"
-                    },
+                    onClick = { selectedGameScreen = "players" },
                     icon = { Icon(Icons.Filled.Groups, contentDescription = "Jugadores") },
                     label = { Text("Jugadores") }
                 )

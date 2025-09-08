@@ -17,7 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -25,9 +25,13 @@ import androidx.compose.ui.unit.dp
 import com.pingu.tfg_glitch.data.*
 import com.pingu.tfg_glitch.ui.components.PlayerInfoCard
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import com.pingu.tfg_glitch.ui.theme.getDiceBackground
+import com.pingu.tfg_glitch.ui.theme.getIconForCrop
+import com.pingu.tfg_glitch.ui.theme.getIconForDice
+import com.pingu.tfg_glitch.ui.theme.getIconForEnergy
+import com.pingu.tfg_glitch.ui.theme.getIconForGranjero
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 // --- Instancias de servicios ---
 private val firestoreService = FirestoreService()
@@ -55,11 +59,7 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
     var showMysteryResultDialog by remember { mutableStateOf(false) }
     var showChangeDiceFaceDialog by remember { mutableStateOf(false) }
     var showFarmerSkillsDialog by remember { mutableStateOf(false) }
-
-    // Nuevo estado para el diálogo de la Visionaria Píxel
     var showVisionaryReminderDialog by remember { mutableStateOf(false) }
-
-    // Nuevo estado para el diálogo de la Botánica Mutante
     var showBotanistReminderDialog by remember { mutableStateOf(false) }
 
 
@@ -118,7 +118,11 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         currentPlayer?.let { player ->
-                            PlayerInfoCardWithFarmer(player = player, onClickSkills = { showFarmerSkillsDialog = true })
+                            Column {
+                                PlayerInfoCard(player = player)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                PlayerFarmerInfo(player = player, onClickSkills = { showFarmerSkillsDialog = true })
+                            }
                         }
                     }
                 }
@@ -191,7 +195,6 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
                         onUseEngineerActive = { showChangeDiceFaceDialog = true },
                         onUseBotanistActive = {
                             coroutineScope.launch {
-                                // Intentamos usar la habilidad, la lógica de coste y uso se maneja en GameService
                                 val success = gameService.usarActivableBotanica(currentPlayerId)
                                 if (success) showBotanistReminderDialog = true
                             }
@@ -263,7 +266,6 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
         FarmerSkillsDialog(granjero = currentPlayer!!.granjero!!) { showFarmerSkillsDialog = false }
     }
 
-    // Diálogo para la habilidad de la Botánica Mutante
     if (showBotanistReminderDialog) {
         AlertDialog(
             onDismissRequest = { showBotanistReminderDialog = false },
@@ -277,7 +279,6 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
         )
     }
 
-    // Diálogo para la habilidad de la Visionaria Píxel
     if (showVisionaryReminderDialog) {
         AlertDialog(
             onDismissRequest = { showVisionaryReminderDialog = false },
@@ -297,67 +298,24 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
 // --- Sub-componentes de la pantalla ---
 // ========================================================================
 
-/**
- * [MODIFICADO] Combina PlayerInfoCard con el nombre del granjero y un botón de habilidades.
- */
 @Composable
-private fun PlayerInfoCardWithFarmer(player: Player, onClickSkills: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+private fun PlayerFarmerInfo(player: Player, onClickSkills: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Fila principal con nombre del jugador y recursos
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = player.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "${player.money}",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Icon(Icons.Default.Paid, contentDescription = "Monedas", tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(
-                        text = "${player.glitchEnergy}",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Icon(Icons.Default.Bolt, contentDescription = "Energía Glitch", tint = MaterialTheme.colorScheme.secondary)
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Fila con el nombre del granjero y el botón de habilidades
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = player.granjero?.nombre ?: "Sin Granjero",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onClickSkills, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Info, contentDescription = "Ver Habilidades")
-                }
-            }
+        Text(
+            text = player.granjero?.nombre ?: "Sin Granjero",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        IconButton(onClick = onClickSkills, modifier = Modifier.size(24.dp)) {
+            Icon(Icons.Default.Info, contentDescription = "Ver Habilidades")
         }
     }
 }
 
-/**
- * [¡NUEVO!] Muestra la información del Granjero actual y sus habilidades en un diálogo.
- */
 @Composable
 private fun FarmerSkillsDialog(granjero: Granjero, onDismiss: () -> Unit) {
     AlertDialog(
@@ -384,9 +342,6 @@ private fun FarmerSkillsDialog(granjero: Granjero, onDismiss: () -> Unit) {
     )
 }
 
-/**
- * [MODIFICADO] Muestra una parrilla de cultivos que se pueden "cosechar" (añadir al inventario).
- */
 @Composable
 private fun CombinedCropSection(enabled: Boolean, inventory: List<CultivoInventario>, onHarvest: (CartaSemilla) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -418,9 +373,6 @@ private fun CombinedCropSection(enabled: Boolean, inventory: List<CultivoInventa
     }
 }
 
-/**
- * [NUEVO] Componente que combina la visualización del inventario y la acción de cosecha.
- */
 @Composable
 private fun CombinedCropItem(
     crop: CartaSemilla,
@@ -440,10 +392,10 @@ private fun CombinedCropItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = crop.nombre.first().toString(),
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
+            Icon(
+                painter = getIconForCrop(crop.id),
+                contentDescription = crop.nombre,
+                modifier = Modifier.size(32.dp)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -455,9 +407,6 @@ private fun CombinedCropItem(
     }
 }
 
-/**
- * Muestra los dados del jugador y su estado.
- */
 @Composable
 private fun DiceSection(
     playerState: PlayerStateSnapshot,
@@ -501,10 +450,6 @@ private fun DiceSection(
     }
 }
 
-/**
- * [MODIFICADO] Muestra los botones de acción principales según la fase de la tirada.
- * Se añaden los botones para las habilidades activas de la Botánica y la Visionaria.
- */
 @Composable
 private fun ActionButtons(
     playerState: PlayerStateSnapshot,
@@ -527,9 +472,16 @@ private fun ActionButtons(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Botones de habilidades de los granjeros
-        if (canPerformActions && (playerState.granjero?.id == "botanica_mutante" || playerState.granjero?.id == "visionaria_pixel")) {
-            HabilityButtons(playerState, canPerformActions, onUseBotanistActive, onUseVisionaryActive)
+        if (canPerformActions && playerState.granjero != null) {
+            HabilityButtons(
+                playerState = playerState,
+                canPerformActions = canPerformActions,
+                onUseBotanistActive = onUseBotanistActive,
+                onUseVisionaryActive = onUseVisionaryActive,
+                onUseEngineerActive = onUseEngineerActive
+            )
         }
+
 
         AnimatedContent(targetState = playerState.rollPhase, label = "ActionButtonsAnimation") { phase ->
             Column(
@@ -554,7 +506,7 @@ private fun ActionButtons(
                                 Text("Confirmar")
                             }
                         }
-                        // Habilidades del Ingeniero
+                        // Habilidad pasiva del Ingeniero
                         if (playerState.granjero?.id == "ingeniero_glitch") {
                             Button(
                                 onClick = { showEngineerPassiveReroll = true },
@@ -562,13 +514,6 @@ private fun ActionButtons(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text("Usar Reroll Pasivo")
-                            }
-                            Button(
-                                onClick = onUseEngineerActive,
-                                enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Activar Habilidad (1⚡)")
                             }
                         }
                     }
@@ -615,48 +560,71 @@ private fun ActionButtons(
     }
 }
 
-/**
- * [NUEVO] Componente auxiliar para agrupar los botones de habilidades activas.
- */
 @Composable
 private fun HabilityButtons(
     playerState: PlayerStateSnapshot,
     canPerformActions: Boolean,
     onUseBotanistActive: () -> Unit,
-    onUseVisionaryActive: () -> Unit
+    onUseVisionaryActive: () -> Unit,
+    onUseEngineerActive: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Habilidad de la Botánica Mutante
-        if (playerState.granjero?.id == "botanica_mutante") {
-            OutlinedButton(
-                onClick = onUseBotanistActive,
-                enabled = canPerformActions && playerState.glitchEnergy >= 2 && !playerState.haUsadoHabilidadActiva,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.LocalFlorist, contentDescription = "Activar Habilidad Botánica", modifier = Modifier.size(18.dp))
-                Text("Activar (2⚡)", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        // Habilidad de la Visionaria Píxel
-        if (playerState.granjero?.id == "visionaria_pixel") {
-            OutlinedButton(
-                onClick = onUseVisionaryActive,
-                enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Visibility, contentDescription = "Activar Habilidad Visionaria", modifier = Modifier.size(18.dp))
-                Text("Activar (1⚡)", style = MaterialTheme.typography.bodySmall)
+        playerState.granjero?.let { granjero ->
+            val buttonModifier = Modifier.weight(1f)
+            when (granjero.id) {
+                "botanica_mutante" -> {
+                    OutlinedButton(
+                        onClick = onUseBotanistActive,
+                        enabled = canPerformActions && playerState.glitchEnergy >= 2 && !playerState.haUsadoHabilidadActiva,
+                        modifier = buttonModifier
+                    ) {
+                        Icon(painter = getIconForGranjero(granjero.id), contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Activar (2")
+                            Icon(painter = getIconForEnergy(), contentDescription = "Energía", modifier = Modifier.size(12.dp))
+                            Text(")")
+                        }
+                    }
+                }
+                "visionaria_pixel" -> {
+                    OutlinedButton(
+                        onClick = onUseVisionaryActive,
+                        enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva,
+                        modifier = buttonModifier
+                    ) {
+                        Icon(painter = getIconForGranjero(granjero.id), contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Activar (1")
+                            Icon(painter = getIconForEnergy(), contentDescription = "Energía", modifier = Modifier.size(12.dp))
+                            Text(")")
+                        }
+                    }
+                }
+                "ingeniero_glitch" -> {
+                    Button(
+                        onClick = onUseEngineerActive,
+                        enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva && playerState.rollPhase == 1,
+                        modifier = buttonModifier
+                    ) {
+                        Icon(painter = getIconForGranjero(granjero.id), contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Habilidad (1")
+                            Icon(painter = getIconForEnergy(), contentDescription = "Energía", modifier = Modifier.size(12.dp))
+                            Text(")")
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-/**
- * Un `data class` para crear una instantánea del estado del jugador.
- */
 private data class PlayerStateSnapshot(
     val granjero: Granjero?,
     val glitchEnergy: Int,
@@ -670,24 +638,12 @@ private data class PlayerStateSnapshot(
     val lastMysteryResult: String?
 )
 
-/**
- * Muestra una representación visual de un dado.
- */
 @Composable
 fun DiceView(symbol: DadoSimbolo, isKept: Boolean, isEnabled: Boolean, onClick: () -> Unit) {
-    val (icon, color, contentDescription) = when (symbol) {
-        DadoSimbolo.GLITCH -> Triple(Icons.Default.Style, MaterialTheme.colorScheme.error, "Robar Carta")
-        DadoSimbolo.CRECIMIENTO -> Triple(Icons.Default.Add, MaterialTheme.colorScheme.tertiary, "Crecimiento")
-        DadoSimbolo.ENERGIA -> Triple(Icons.Default.Bolt, MaterialTheme.colorScheme.secondary, "Energía")
-        DadoSimbolo.MONEDA -> Triple(Icons.Default.Paid, MaterialTheme.colorScheme.primary, "Moneda")
-        DadoSimbolo.MISTERIO -> Triple(Icons.AutoMirrored.Filled.Help, MaterialTheme.colorScheme.tertiary, "Misterio")
-        DadoSimbolo.PLANTAR -> Triple(Icons.Default.Spa, MaterialTheme.colorScheme.primary, "Plantar")
-    }
-
-    val cardVariant = if (isKept) {
+    val cardColors = if (isKept) {
         CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     } else {
-        CardDefaults.outlinedCardColors()
+        CardDefaults.cardColors(containerColor = Color.Transparent)
     }
 
     Card(
@@ -695,18 +651,28 @@ fun DiceView(symbol: DadoSimbolo, isKept: Boolean, isEnabled: Boolean, onClick: 
         onClick = onClick,
         enabled = isEnabled,
         shape = RoundedCornerShape(8.dp),
-        colors = cardVariant,
-        border = if (isKept) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        colors = cardColors,
+        border = if (isKept) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(imageVector = icon, contentDescription = contentDescription, tint = color, modifier = Modifier.size(32.dp))
+            // Capa de Fondo
+            Icon(
+                painter = getDiceBackground(),
+                contentDescription = null, // El fondo es decorativo
+                modifier = Modifier.fillMaxSize(),
+                tint = if (isKept) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+            )
+            // Capa del Símbolo
+            Icon(
+                painter = getIconForDice(symbol),
+                contentDescription = symbol.name,
+                modifier = Modifier.size(36.dp),
+                tint = MaterialTheme.colorScheme.onSurface // Un color neutro que funciona bien sobre el fondo
+            )
         }
     }
 }
 
-/**
- * [¡NUEVO!] Diálogo para la habilidad activa del Ingeniero: cambiar la cara de un dado.
- */
 @Composable
 fun ChangeDiceFaceDialog(
     currentDice: List<DadoSimbolo>,
@@ -744,9 +710,6 @@ fun ChangeDiceFaceDialog(
     )
 }
 
-/**
- * Diálogo para mostrar los encuentros de misterio.
- */
 @Composable
 fun MysteryEncounterDialog(
     encounter: MysteryEncounter,
@@ -789,9 +752,6 @@ fun MysteryEncounterDialog(
     )
 }
 
-/**
- * Minijuego de tiempo de reacción.
- */
 @Composable
 fun ReactionTimeMinigame(onResult: (Boolean) -> Unit) {
     var gameState by remember { mutableStateOf("ready") }
@@ -833,3 +793,4 @@ fun PlayerActionsScreenPreview() {
         PlayerActionsScreen(gameId = "ABCDEF", currentPlayerId = "sample-player-id")
     }
 }
+

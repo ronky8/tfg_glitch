@@ -7,9 +7,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -23,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.pingu.tfg_glitch.data.*
 import com.pingu.tfg_glitch.ui.components.PlayerInfoCard
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import com.pingu.tfg_glitch.ui.theme.getIconForCoin
 import com.pingu.tfg_glitch.ui.theme.getIconForCrop
 import kotlinx.coroutines.launch
 import kotlin.math.max
@@ -191,7 +190,7 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Precio actual: $price")
                         Spacer(modifier = Modifier.width(4.dp))
-                        Icon(Icons.Default.Paid, contentDescription = "Moneda", modifier = Modifier.size(16.dp))
+                        Icon(painter = getIconForCoin(), contentDescription = "Moneda", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -269,9 +268,6 @@ fun MarketScreen(gameId: String, currentPlayerId: String) {
 // --- Sub-componentes de la pantalla ---
 // ========================================================================
 
-/**
- * Muestra la información del estado actual de la partida y del jugador.
- */
 @Composable
 private fun StatusHeader(game: Game?, player: Player?) {
     val phaseText = when (game?.roundPhase) {
@@ -294,14 +290,11 @@ private fun StatusHeader(game: Game?, player: Player?) {
             modifier = Modifier.padding(bottom = 16.dp)
         )
         player?.let {
-            PlayerInfoCard(it) // Ahora es una función pública
+            PlayerInfoCard(it)
         }
     }
 }
 
-/**
- * Muestra el inventario del jugador con opciones para vender.
- */
 @Composable
 private fun CombinedMarketAndInventoryView(
     allCrops: List<CartaSemilla>,
@@ -359,7 +352,7 @@ private fun CombinedMarketAndInventoryView(
                     ) {
                         // Icono del cultivo
                         Icon(
-                            imageVector = getIconForCrop(crop.id),
+                            painter = getIconForCrop(crop.id),
                             contentDescription = crop.nombre,
                             modifier = Modifier.size(32.dp),
                             tint = MaterialTheme.colorScheme.secondary
@@ -379,7 +372,12 @@ private fun CombinedMarketAndInventoryView(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(2.dp))
-                            Icon(Icons.Default.Paid, contentDescription = "Moneda", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                painter = getIconForCoin(),
+                                contentDescription = "Moneda",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
@@ -389,9 +387,6 @@ private fun CombinedMarketAndInventoryView(
 }
 
 
-/**
- * Muestra el evento de la ronda y los efectos permanentes.
- */
 @Composable
 private fun EventSection(game: Game) {
     Column(
@@ -439,9 +434,6 @@ private fun EventSection(game: Game) {
     }
 }
 
-/**
- * Una tarjeta genérica para mostrar información o alertas.
- */
 @Composable
 private fun InfoCard(text: String, icon: ImageVector, color: CardColors) {
     ElevatedCard(modifier = Modifier.fillMaxWidth(), colors = color) {
@@ -469,3 +461,4 @@ fun PreviewMarketScreen() {
         }
     }
 }
+

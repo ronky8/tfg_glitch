@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,7 +27,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,8 +44,9 @@ import com.pingu.tfg_glitch.ui.components.PlayerInfoCard
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
 import kotlinx.coroutines.launch
 import androidx.compose.material3.Surface
-import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.PaddingValues
+import com.pingu.tfg_glitch.ui.theme.getIconForCoin
+import com.pingu.tfg_glitch.ui.theme.getIconForEnergy
 
 // --- Instancias de servicios ---
 private val firestoreService = FirestoreService()
@@ -216,12 +217,37 @@ private fun ObjectiveCard(
                     tint = MaterialTheme.colorScheme.tertiary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "${objective.reward.moneyChange}💰 / ${objective.reward.energyChange}⚡",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
+                // Fila para la recompensa con iconos
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val rewardTextStyle = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    if (objective.reward.moneyChange > 0) {
+                        Text(text = "+${objective.reward.moneyChange}", style = rewardTextStyle)
+                        Icon(
+                            painter = getIconForCoin(),
+                            contentDescription = "Monedas",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    if (objective.reward.moneyChange > 0 && objective.reward.energyChange > 0) {
+                        Text(text = "/", style = rewardTextStyle)
+                    }
+                    if (objective.reward.energyChange > 0) {
+                        Text(text = "+${objective.reward.energyChange}", style = rewardTextStyle)
+                        Icon(
+                            painter = getIconForEnergy(),
+                            contentDescription = "Energía",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(16.dp))
 

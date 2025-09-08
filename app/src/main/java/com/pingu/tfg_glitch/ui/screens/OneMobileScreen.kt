@@ -1,7 +1,11 @@
 package com.pingu.tfg_glitch.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
@@ -15,8 +19,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.pingu.tfg_glitch.data.*
-import com.pingu.tfg_glitch.ui.components.MarketItem
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import com.pingu.tfg_glitch.ui.theme.getIconForCoin
+import com.pingu.tfg_glitch.ui.theme.getIconForCrop
 import kotlinx.coroutines.launch
 
 // --- Instancias de servicios ---
@@ -31,6 +36,7 @@ private val gameService = GameService()
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OneMobileScreen(
+    onBackToMainMenu: () -> Unit,
     onAttemptExit: () -> Unit
 ) {
     // --- Estados ---
@@ -66,13 +72,18 @@ fun OneMobileScreen(
         showMysteryResultDialog = player?.lastMysteryResult != null
     }
 
+    // Captura el gesto de retroceso y lo redirige a la lógica de confirmación
+    BackHandler {
+        onAttemptExit()
+    }
+
     // --- UI Principal ---
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Director de Juego") },
                 navigationIcon = {
-                    IconButton(onClick = onAttemptExit) {
+                    IconButton(onClick = onAttemptExit) { // Botón también intenta salir
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 }
@@ -95,7 +106,7 @@ fun OneMobileScreen(
                     Text("Error", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.error)
                     Text(errorMessage!!, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = onAttemptExit) { Text("Volver al Menú") }
+                    Button(onClick = onBackToMainMenu) { Text("Volver al Menú") }
                 }
             }
             else -> {
@@ -108,21 +119,7 @@ fun OneMobileScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     item {
-                        game?.let {
-                            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Ronda: ${it.roundNumber}",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
+                        RoundCounterCard(game?.roundNumber)
                     }
                     item { MarketPricesCard(game?.marketPrices) }
                     item { GlitchEventCard(game?.lastEvent) }
@@ -184,8 +181,27 @@ fun OneMobileScreen(
 
 
 // ========================================================================
-// --- Sub-componentes de la pantalla ---
+// --- Sub-componentes de la pantalla (Restaurados) ---
 // ========================================================================
+
+@Composable
+private fun RoundCounterCard(roundNumber: Int?) {
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "Ronda Actual",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = roundNumber?.toString() ?: "-",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
 
 @Composable
 private fun MarketPricesCard(marketPrices: MarketPrices?) {
@@ -194,37 +210,63 @@ private fun MarketPricesCard(marketPrices: MarketPrices?) {
             Text(
                 "Mercado Actual",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 12.dp)
             )
             if (marketPrices != null) {
-                val cropList = listOf(
-                    "Zanahoria" to marketPrices.zanahoria,
-                    "Trigo Común" to marketPrices.trigo,
-                    "Patata Terrosa" to marketPrices.patata,
-                    "Tomate Cúbico" to marketPrices.tomateCubico,
-                    "Maíz Arcoíris" to marketPrices.maizArcoiris,
-                    "Brócoli Cristal" to marketPrices.brocoliCristal,
-                    "Pimiento Explosivo" to marketPrices.pimientoExplosivo
-                )
-                // Layout en dos columnas
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 120.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.heightIn(max = 200.dp) // Altura controlada
                 ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (i in cropList.indices step 2) {
-                            MarketItem(cropName = cropList[i].first, price = cropList[i].second)
+                    items(allCrops, key = { it.id }) { crop ->
+                        val price = when(crop.id) {
+                            "zanahoria" -> marketPrices.zanahoria
+                            "trigo" -> marketPrices.trigo
+                            "patata" -> marketPrices.patata
+                            "tomateCubico" -> marketPrices.tomateCubico
+                            "maizArcoiris" -> marketPrices.maizArcoiris
+                            "brocoliCristal" -> marketPrices.brocoliCristal
+                            "pimientoExplosivo" -> marketPrices.pimientoExplosivo
+                            else -> 0
                         }
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (i in 1 until cropList.size step 2) {
-                            MarketItem(cropName = cropList[i].first, price = cropList[i].second)
-                        }
+                        MarketItem(cropId = crop.id, cropName = crop.nombre, price = price)
                     }
                 }
             } else {
                 Text("Cargando precios...")
             }
+        }
+    }
+}
+
+@Composable
+private fun MarketItem(cropId: String, cropName: String, price: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Icon(
+            painter = getIconForCrop(cropId),
+            contentDescription = cropName,
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.secondary
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "$price",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                painter = getIconForCoin(),
+                contentDescription = "Moneda",
+                modifier = Modifier.size(18.dp).padding(start = 4.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
@@ -273,7 +315,6 @@ private fun ActionButtons(onActivateMystery: () -> Unit, onAdvanceRound: () -> U
     }
 }
 
-
 // ========================================================================
 // --- Preview ---
 // ========================================================================
@@ -283,7 +324,8 @@ private fun ActionButtons(onActivateMystery: () -> Unit, onAdvanceRound: () -> U
 fun OneMobileScreenPreview() {
     GranjaGlitchAppTheme {
         Surface {
-            OneMobileScreen(onAttemptExit = {})
+            OneMobileScreen(onBackToMainMenu = {}, onAttemptExit = {})
         }
     }
 }
+

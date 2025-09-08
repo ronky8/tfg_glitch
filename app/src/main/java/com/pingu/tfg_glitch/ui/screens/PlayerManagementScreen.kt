@@ -1,8 +1,5 @@
 package com.pingu.tfg_glitch.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,13 +9,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.pingu.tfg_glitch.data.*
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import com.pingu.tfg_glitch.ui.theme.getIconForCoin
+import com.pingu.tfg_glitch.ui.theme.getIconForCrop
+import com.pingu.tfg_glitch.ui.theme.getIconForEnergy
+import com.pingu.tfg_glitch.ui.theme.getIconForPV
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -45,8 +45,8 @@ fun PlayerManagementScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showEndGameDialog by remember { mutableStateOf(false) }
-    // [CORREGIDO] Estado para mostrar el diálogo de gestión de inventario. Guarda el ID del jugador a editar.
-    var playerToManageInventoryId by remember { mutableStateOf<String?>(null) }
+    var showInventoryDialog by remember { mutableStateOf(false) }
+    var selectedPlayerForInventory by remember { mutableStateOf<Player?>(null) }
 
 
     // --- Estados Derivados ---
@@ -102,7 +102,10 @@ fun PlayerManagementScreen(
                                     if (success) snackbarHostState.showSnackbar("Recursos de ${player.name} ajustados.")
                                 }
                             },
-                            onManageInventory = { playerToManageInventoryId = player.id },
+                            onManageInventory = {
+                                selectedPlayerForInventory = player
+                                showInventoryDialog = true
+                            },
                             onDeletePlayer = {
                                 coroutineScope.launch {
                                     gameService.deletePlayerFromGame(gameId, player.id)
@@ -133,25 +136,7 @@ fun PlayerManagementScreen(
         }
     }
 
-    // [CORREGIDO] Diálogo para gestionar el inventario de un jugador.
-    // Se busca la versión más reciente del jugador desde 'allPlayers' para asegurar que la UI se recompone.
-    playerToManageInventoryId?.let { playerId ->
-        val freshPlayer = allPlayers.find { it.id == playerId }
-        if (freshPlayer != null) {
-            InventoryManagementDialog(
-                player = freshPlayer,
-                onDismiss = { playerToManageInventoryId = null },
-                onAdjustCrop = { cropId, delta ->
-                    coroutineScope.launch {
-                        gameService.adjustPlayerInventory(freshPlayer.id, cropId, delta)
-                    }
-                }
-            )
-        }
-    }
-
-
-    // Diálogo de fin de partida
+    // Diálogos
     if (showEndGameDialog) {
         EndGameDialog(
             onDismiss = { showEndGameDialog = false },
@@ -163,6 +148,21 @@ fun PlayerManagementScreen(
             }
         )
     }
+
+    if (showInventoryDialog && selectedPlayerForInventory != null) {
+        val player = allPlayers.find { it.id == selectedPlayerForInventory!!.id }
+        if (player != null) {
+            InventoryManagementDialog(
+                player = player,
+                onDismiss = { showInventoryDialog = false },
+                onAdjustCrop = { cropId, delta ->
+                    coroutineScope.launch {
+                        gameService.adjustPlayerInventory(player.id, cropId, delta)
+                    }
+                }
+            )
+        }
+    }
 }
 
 
@@ -170,9 +170,6 @@ fun PlayerManagementScreen(
 // --- Sub-componentes de la pantalla ---
 // ========================================================================
 
-/**
- * Muestra el estado actual de la partida (fase y turno).
- */
 @Composable
 private fun StatusHeader(game: Game?, allPlayers: List<Player>) {
     val currentTurnPlayer = allPlayers.find { it.id == game?.currentPlayerTurnId }
@@ -196,9 +193,6 @@ private fun StatusHeader(game: Game?, allPlayers: List<Player>) {
     }
 }
 
-/**
- * Tarjeta que muestra la información detallada de un jugador y los controles del anfitrión.
- */
 @Composable
 private fun PlayerCard(
     player: Player,
@@ -209,26 +203,20 @@ private fun PlayerCard(
     onManageInventory: () -> Unit,
     onDeletePlayer: () -> Unit
 ) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     var expanded by remember { mutableStateOf(false) }
 
-    // Calcular PV
     val totalPV = remember(player) {
         val unsoldCropsValue = player.inventario.sumOf { it.valorVentaBase.toLong() * it.cantidad.toLong() }
         val unsoldCropsMoney = (unsoldCropsValue.toDouble() / 2.0).roundToInt()
         val finalMoney = player.money + unsoldCropsMoney
-
         val moneyPV = finalMoney / 3
         val energyPV = player.glitchEnergy
-        val objectivesPV = 0 // Los objetivos ya no dan PV directo
-
+        val objectivesPV = 0
         moneyPV + energyPV + objectivesPV + player.manualBonusPV
     }
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            // Fila principal con nombre, PV y botón de expandir
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -241,7 +229,8 @@ private fun PlayerCard(
                     Text(text = player.name, style = MaterialTheme.typography.titleLarge)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "$totalPV PV", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(text = "$totalPV", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Icon(painter = getIconForPV(), contentDescription = "Puntos de Victoria", modifier = Modifier.size(24.dp).padding(start = 4.dp))
                     if (isHost) {
                         IconButton(onClick = { expanded = !expanded }) {
                             Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Expandir")
@@ -250,53 +239,37 @@ private fun PlayerCard(
                 }
             }
 
-            // Información de recursos
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("💰 ${player.money}", style = MaterialTheme.typography.bodyLarge)
-                Text("⚡ ${player.glitchEnergy}", style = MaterialTheme.typography.bodyLarge)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painter = getIconForCoin(), contentDescription = "Monedas", modifier = Modifier.size(18.dp))
+                    Text(" ${player.money}", style = MaterialTheme.typography.bodyLarge)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painter = getIconForEnergy(), contentDescription = "Energía", modifier = Modifier.size(18.dp))
+                    Text(" ${player.glitchEnergy}", style = MaterialTheme.typography.bodyLarge)
+                }
             }
 
-            // Controles expandibles del anfitrión
             if (expanded && isHost) {
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
-                // Ajuste de Monedas y Energía
-                AdjustmentRow(
-                    label = "Recursos",
-                    onAdd = { onAdjustResources(1, 0) },
-                    onRemove = { onAdjustResources(-1, 0) },
-                    icon = Icons.Default.Paid
-                )
-                AdjustmentRow(
-                    label = "",
-                    onAdd = { onAdjustResources(0, 1) },
-                    onRemove = { onAdjustResources(0, -1) },
-                    icon = Icons.Default.Bolt
-                )
-                // Ajuste de PV
-                AdjustmentRow(
-                    label = "Puntos Victoria",
-                    onAdd = { onAdjustPV(1) },
-                    onRemove = { onAdjustPV(-1) },
-                    icon = Icons.Default.Star
-                )
+                AdjustmentRow(label = "Monedas", onAdd = { onAdjustResources(1, 0) }, onRemove = { onAdjustResources(-1, 0) }, icon = getIconForCoin())
+                AdjustmentRow(label = "Energía", onAdd = { onAdjustResources(0, 1) }, onRemove = { onAdjustResources(0, -1) }, icon = getIconForEnergy())
+                AdjustmentRow(label = "Puntos Victoria", onAdd = { onAdjustPV(1) }, onRemove = { onAdjustPV(-1) }, icon = getIconForPV())
 
-                // Botón para gestionar inventario
-                Button(
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
                     onClick = onManageInventory,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Inventory, contentDescription = "Inventario")
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                    Text("Gestionar Inventario", color = MaterialTheme.colorScheme.onTertiaryContainer)
+                    Text("Gestionar Inventario")
                 }
 
-
-                // Botón de eliminar
-                if (!isCurrentPlayer) { // El anfitrión no se puede eliminar a sí mismo
+                if (!isCurrentPlayer) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onDeletePlayer,
@@ -313,34 +286,30 @@ private fun PlayerCard(
     }
 }
 
-/**
- * Fila de botones para ajustar valores (+/-).
- */
 @Composable
-private fun AdjustmentRow(label: String, onAdd: () -> Unit, onRemove: () -> Unit, icon: ImageVector) {
+private fun AdjustmentRow(label: String, onAdd: () -> Unit, onRemove: () -> Unit, icon: Painter) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(painter = icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.width(8.dp))
-            FilledTonalButton(onClick = onRemove, contentPadding = PaddingValues(8.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilledTonalIconButton(onClick = onRemove) {
                 Icon(Icons.Default.Remove, contentDescription = "Restar")
             }
             Spacer(modifier = Modifier.width(4.dp))
-            FilledTonalButton(onClick = onAdd, contentPadding = PaddingValues(8.dp)) {
+            FilledTonalIconButton(onClick = onAdd) {
                 Icon(Icons.Default.Add, contentDescription = "Añadir")
             }
         }
     }
 }
 
-/**
- * Botones de acción principales para el anfitrión en la parte inferior de la pantalla.
- */
 @Composable
 private fun HostControls(
     game: Game,
@@ -371,9 +340,6 @@ private fun HostControls(
     }
 }
 
-/**
- * Diálogo de confirmación para terminar la partida.
- */
 @Composable
 private fun EndGameDialog(
     onDismiss: () -> Unit,
@@ -396,7 +362,9 @@ private fun EndGameDialog(
     )
 }
 
-// Diálogo para gestionar el inventario
+/**
+ * [NUEVO] Diálogo para gestionar el inventario de un jugador.
+ */
 @Composable
 private fun InventoryManagementDialog(
     player: Player,
@@ -411,19 +379,31 @@ private fun InventoryManagementDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(allCrops) { crop ->
-                    val currentAmount = player.inventario.find { it.id == crop.id }?.cantidad ?: 0
+                items(allCrops, key = { it.id }) { crop ->
+                    val currentQuantity = player.inventario.find { it.id == crop.id }?.cantidad ?: 0
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("${crop.nombre}: $currentAmount", modifier = Modifier.weight(1f))
-                        Row {
-                            IconButton(onClick = { onAdjustCrop(crop.id, -1) }, enabled = currentAmount > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = getIconForCrop(crop.id),
+                                contentDescription = crop.nombre,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("${crop.nombre} (x$currentQuantity)")
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalIconButton(
+                                onClick = { onAdjustCrop(crop.id, -1) },
+                                enabled = currentQuantity > 0
+                            ) {
                                 Icon(Icons.Default.Remove, "Quitar")
                             }
-                            IconButton(onClick = { onAdjustCrop(crop.id, 1) }) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            FilledTonalIconButton(onClick = { onAdjustCrop(crop.id, 1) }) {
                                 Icon(Icons.Default.Add, "Añadir")
                             }
                         }
@@ -438,11 +418,6 @@ private fun InventoryManagementDialog(
         }
     )
 }
-
-
-// ========================================================================
-// --- Preview ---
-// ========================================================================
 
 @Preview(showBackground = true)
 @Composable
