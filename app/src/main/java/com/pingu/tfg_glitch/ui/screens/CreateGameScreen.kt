@@ -6,7 +6,6 @@ import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -14,11 +13,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -26,6 +23,7 @@ import com.pingu.tfg_glitch.data.GameService
 import com.pingu.tfg_glitch.data.Granjero
 import com.pingu.tfg_glitch.data.allGranjeros
 import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
+import com.pingu.tfg_glitch.ui.theme.getIconForGranjero
 import kotlinx.coroutines.launch
 
 // Instancia del servicio para la gestión de partidas.
@@ -38,7 +36,7 @@ fun CreateGameScreen(
     onBack: () -> Unit
 ) {
     var hostNameInput by remember { mutableStateOf("") }
-    var selectedGranjeroId by remember { mutableStateOf<String?>(null) } // ¡NUEVO!
+    var selectedGranjeroId by remember { mutableStateOf<String?>(null) }
     var generatedGameCode by remember { mutableStateOf<String?>(null) }
     var generatedHostPlayerId by remember { mutableStateOf<String?>(null) }
     var showGameCodeDisplay by remember { mutableStateOf(false) }
@@ -228,7 +226,6 @@ private fun GranjeroSelector(
         } else {
             granjeros.forEach { granjero ->
                 val isSelected = granjero.id == selectedId
-                val icon = getIconForGranjero(granjero.iconName)
                 val colors = if (isSelected) {
                     IconButtonDefaults.filledIconButtonColors()
                 } else {
@@ -245,25 +242,18 @@ private fun GranjeroSelector(
                         modifier = Modifier.size(64.dp),
                         colors = colors
                     ) {
-                        Icon(icon, contentDescription = granjero.nombre, modifier = Modifier.size(32.dp))
+                        Icon(
+                            painter = getIconForGranjero(granjero.id),
+                            contentDescription = granjero.nombre,
+                            modifier = Modifier.size(32.dp),
+                            tint = Color.Unspecified // Granjero mantiene sus colores
+                        )
                     }
                 }
             }
         }
     }
 }
-
-@Composable
-private fun getIconForGranjero(iconName: String): ImageVector {
-    return when (iconName) {
-        "engineering" -> Icons.Default.Engineering
-        "local_florist" -> Icons.Default.LocalFlorist
-        "storefront" -> Icons.Default.Storefront
-        "visibility" -> Icons.Default.Visibility
-        else -> Icons.Default.HelpOutline
-    }
-}
-
 
 @Preview(showBackground = true)
 @Composable
@@ -274,3 +264,4 @@ fun CreateGameScreenPreview() {
         }
     }
 }
+

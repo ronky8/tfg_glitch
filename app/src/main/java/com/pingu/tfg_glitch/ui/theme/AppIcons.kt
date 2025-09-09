@@ -3,7 +3,7 @@ package com.pingu.tfg_glitch.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
-import com.pingu.tfg_glitch.R // ¡Importante! Para acceder a tus recursos.
+import com.pingu.tfg_glitch.R
 import com.pingu.tfg_glitch.data.DadoSimbolo
 
 /**
@@ -64,11 +64,10 @@ fun getIconForDice(symbol: DadoSimbolo): Painter {
 @Composable
 fun getIconForGranjero(granjeroId: String): Painter {
     val resourceId = when (granjeroId) {
-        // TODO: Reemplazar con los nombres de tus PNG para los granjeros
-        "ingeniero_glitch" -> placeholderIcon
-        "botanica_mutante" -> placeholderIcon
-        "comerciante_sombrio" -> placeholderIcon
-        "visionaria_pixel" -> placeholderIcon
+        "ingeniero_glitch" -> R.drawable.ic_ingeniero
+        "botanica_mutante" -> R.drawable.ic_botanica
+        "comerciante_sombrio" -> R.drawable.ic_comerciante
+        "visionaria_pixel" -> R.drawable.ic_visionaria
         else -> placeholderIcon
     }
     return painterResource(id = resourceId)

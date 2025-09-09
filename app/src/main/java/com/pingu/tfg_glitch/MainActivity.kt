@@ -34,6 +34,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import android.util.Log
 
+// [NUEVO] Enum para definir los estados de la música de fondo
+private enum class MusicState { MENU, GAME, NONE }
+
 class MainActivity : ComponentActivity() {
     private val userDataStore by lazy { UserDataStore(this) }
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,12 +47,11 @@ class MainActivity : ComponentActivity() {
             val currentScreen = remember { mutableStateOf("loading") }
             var backPressTriggered by remember { mutableStateOf(false) }
 
-            // El Back Handler ahora es más simple: solo notifica a AppNavigation
             onBackPressedDispatcher.addCallback(this, true) {
                 when (currentScreen.value) {
                     "game" -> { /* No hacer nada para evitar salir por accidente */ }
-                    "mainMenu" -> finish() // Solo cierra la app desde el menú principal
-                    else -> backPressTriggered = true // Para el resto de pantallas, delega la lógica
+                    "mainMenu" -> finish()
+                    else -> backPressTriggered = true
                 }
             }
 
@@ -95,10 +97,10 @@ fun AppNavigation(
     var currentPlayerId by currentPlayerIdState
 
     var lastEventName by rememberSaveable { mutableStateOf<String?>(null) }
-    var showEventDialog by rememberSaveable { mutableStateOf(false) }
+    var showEventDialog by remember { mutableStateOf(false) }
 
-    var showTurnStartDialog by rememberSaveable { mutableStateOf(false) }
-    var lastRoundNumber by rememberSaveable { mutableStateOf(-1) }
+    var showTurnStartDialog by remember { mutableStateOf(false) }
+    var lastRoundNumber by remember { mutableStateOf(-1) }
 
     var showKickedDialog by remember { mutableStateOf(false) }
     var showExitOneMobileDialog by remember { mutableStateOf(false) }
@@ -106,25 +108,27 @@ fun AppNavigation(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Lógica para manejar el evento de retroceso
-    LaunchedEffect(backPressTriggered) {
-        if (backPressTriggered) {
-            when (currentScreen) {
-                "oneMobileMode" -> showExitOneMobileDialog = true
-                "rules", "multiplayerMenu", "createGame", "joinGame" -> currentScreen = "mainMenu"
-                "lobby" -> { /* El botón de la TopAppBar ya gestiona esto */ }
-                "finalScore" -> { /* El botón de la TopAppBar ya gestiona esto */ }
-            }
-            onBackPressHandled() // Resetea el trigger
+    // --- [LÓGICA DE AUDIO CORREGIDA] ---
+    var currentMusicState by remember { mutableStateOf(MusicState.NONE) }
+
+    // Este efecto DECIDE qué música debería sonar basándose en la pantalla actual
+    LaunchedEffect(currentScreen) {
+        val newMusicState = when (currentScreen) {
+            "game", "oneMobileMode", "finalScore" -> MusicState.GAME
+            "loading" -> MusicState.NONE
+            else -> MusicState.MENU
+        }
+        if (newMusicState != currentMusicState) {
+            currentMusicState = newMusicState
         }
     }
 
-    // Lógica de Audio
-    LaunchedEffect(currentScreen) {
-        when (currentScreen) {
-            "game", "oneMobileMode", "finalScore" -> SoundManager.playGameMusic(context)
-            "loading" -> { /* No hacer nada */ }
-            else -> SoundManager.playMenuMusic(context)
+    // Este efecto REPRODUCE la música solo cuando el estado musical cambia
+    LaunchedEffect(currentMusicState) {
+        when (currentMusicState) {
+            MusicState.MENU -> SoundManager.playMenuMusic(context)
+            MusicState.GAME -> SoundManager.playGameMusic(context)
+            MusicState.NONE -> SoundManager.stopMusic() // Opcional: para la música en la carga
         }
     }
 
@@ -140,6 +144,19 @@ fun AppNavigation(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    // --- [FIN LÓGICA DE AUDIO] ---
+
+    LaunchedEffect(backPressTriggered) {
+        if (backPressTriggered) {
+            when (currentScreen) {
+                "oneMobileMode" -> showExitOneMobileDialog = true
+                "rules", "multiplayerMenu", "createGame", "joinGame" -> currentScreen = "mainMenu"
+                "lobby" -> { /* El botón de la TopAppBar ya gestiona esto */ }
+                "finalScore" -> { /* El botón de la TopAppBar ya gestiona esto */ }
+            }
+            onBackPressHandled()
         }
     }
 

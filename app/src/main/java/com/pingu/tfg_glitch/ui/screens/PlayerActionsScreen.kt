@@ -1,6 +1,7 @@
 package com.pingu.tfg_glitch.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -9,13 +10,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +34,7 @@ import com.pingu.tfg_glitch.ui.theme.getIconForEnergy
 import com.pingu.tfg_glitch.ui.theme.getIconForGranjero
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 // --- Instancias de servicios ---
 private val firestoreService = FirestoreService()
@@ -140,7 +143,7 @@ fun PlayerActionsScreen(gameId: String, currentPlayerId: String) {
                 }
 
                 item {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 }
 
                 item {
@@ -304,6 +307,13 @@ private fun PlayerFarmerInfo(player: Player, onClickSkills: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(
+            painter = getIconForGranjero(player.granjero?.id ?: ""),
+            contentDescription = "Icono de Granjero",
+            modifier = Modifier.size(24.dp),
+            tint = Color.Unspecified
+        )
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = player.granjero?.nombre ?: "Sin Granjero",
             style = MaterialTheme.typography.titleMedium,
@@ -395,7 +405,8 @@ private fun CombinedCropItem(
             Icon(
                 painter = getIconForCrop(crop.id),
                 contentDescription = crop.nombre,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.secondary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -575,47 +586,36 @@ private fun HabilityButtons(
         playerState.granjero?.let { granjero ->
             val buttonModifier = Modifier.weight(1f)
             when (granjero.id) {
-                "botanica_mutante" -> {
-                    OutlinedButton(
-                        onClick = onUseBotanistActive,
-                        enabled = canPerformActions && playerState.glitchEnergy >= 2 && !playerState.haUsadoHabilidadActiva,
-                        modifier = buttonModifier
-                    ) {
-                        Icon(painter = getIconForGranjero(granjero.id), contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Activar (2")
-                            Icon(painter = getIconForEnergy(), contentDescription = "Energía", modifier = Modifier.size(12.dp))
-                            Text(")")
-                        }
+                "botanica_mutante", "visionaria_pixel", "ingeniero_glitch" -> {
+                    val (onClick, cost, enabled) = when (granjero.id) {
+                        "botanica_mutante" -> Triple(onUseBotanistActive, 2, canPerformActions && playerState.glitchEnergy >= 2 && !playerState.haUsadoHabilidadActiva)
+                        "visionaria_pixel" -> Triple(onUseVisionaryActive, 1, canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva)
+                        "ingeniero_glitch" -> Triple(onUseEngineerActive, 1, canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva && playerState.rollPhase == 1)
+                        else -> Triple({}, 0, false)
                     }
-                }
-                "visionaria_pixel" -> {
-                    OutlinedButton(
-                        onClick = onUseVisionaryActive,
-                        enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva,
-                        modifier = buttonModifier
-                    ) {
-                        Icon(painter = getIconForGranjero(granjero.id), contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Activar (1")
-                            Icon(painter = getIconForEnergy(), contentDescription = "Energía", modifier = Modifier.size(12.dp))
-                            Text(")")
-                        }
-                    }
-                }
-                "ingeniero_glitch" -> {
+
+                    val buttonColors = if (granjero.id == "ingeniero_glitch") ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+
                     Button(
-                        onClick = onUseEngineerActive,
-                        enabled = canPerformActions && playerState.glitchEnergy >= 1 && !playerState.haUsadoHabilidadActiva && playerState.rollPhase == 1,
-                        modifier = buttonModifier
+                        onClick = onClick,
+                        enabled = enabled,
+                        modifier = buttonModifier,
+                        colors = if(granjero.id != "ingeniero_glitch") ButtonDefaults.outlinedButtonColors() else ButtonDefaults.buttonColors()
                     ) {
-                        Icon(painter = getIconForGranjero(granjero.id), contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            painter = getIconForGranjero(granjero.id),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.Unspecified
+                        )
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Habilidad (1")
-                            Icon(painter = getIconForEnergy(), contentDescription = "Energía", modifier = Modifier.size(12.dp))
+                            Text("Habilidad ($cost")
+                            Icon(
+                                painter = getIconForEnergy(),
+                                contentDescription = "Energía",
+                                modifier = Modifier.size(12.dp)
+                            )
                             Text(")")
                         }
                     }
@@ -724,7 +724,14 @@ fun MysteryEncounterDialog(
                 Text(encounter.description, style = MaterialTheme.typography.bodyMedium)
                 if (encounter is MinigameEncounter) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    ReactionTimeMinigame(onResult = onMinigameResult)
+                    // [NUEVO] Selector de minijuegos
+                    when (encounter.minigameType) {
+                        "reaction_time" -> ReactionTimeMinigame(onResult = onMinigameResult)
+                        "rapid_tap" -> RapidTapMinigame(onResult = onMinigameResult)
+                        "memory_sequence" -> MemorySequenceMinigame(onResult = onMinigameResult)
+                        "timing_challenge" -> TimingChallengeMinigame(onResult = onMinigameResult)
+                        "code_breaking" -> CodeBreakingMinigame(onResult = onMinigameResult)
+                    }
                 }
             }
         },
@@ -756,27 +763,273 @@ fun MysteryEncounterDialog(
 fun ReactionTimeMinigame(onResult: (Boolean) -> Unit) {
     var gameState by remember { mutableStateOf("ready") }
     val infiniteTransition = rememberInfiniteTransition("minigame_transition")
+    // Dificultad aumentada: la barra se mueve más rápido
     val position by infiniteTransition.animateFloat(
         initialValue = -0.45f,
         targetValue = 0.45f,
-        animationSpec = infiniteRepeatable(animation = tween(1500, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(animation = tween(1000, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
         label = "bar_position"
     )
     LaunchedEffect(Unit) { gameState = "running" }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(modifier = Modifier.fillMaxWidth().height(40.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(0.2f).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)))
+        Box(
+            modifier = Modifier.fillMaxWidth().height(40.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            // Dificultad aumentada: la zona de acierto es más pequeña
+            Box(Modifier.fillMaxHeight().fillMaxWidth(0.1f).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)))
             Box(Modifier.fillMaxHeight().width(8.dp).align(Alignment.Center).offset(x = (position * 150).dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)))
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = {
-            if (gameState == "running") {
-                gameState = "finished"
-                val success = position in -0.1f..0.1f
-                onResult(success)
-            }
-        }, enabled = gameState == "running", modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = {
+                if (gameState == "running") {
+                    gameState = "finished"
+                    // Dificultad aumentada: la condición de éxito es más estricta
+                    val success = position in -0.05f..0.05f
+                    onResult(success)
+                }
+            },
+            enabled = gameState == "running",
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text(if (gameState == "running") "¡DETENER!" else "...")
+        }
+    }
+}
+
+@Composable
+fun RapidTapMinigame(onResult: (Boolean) -> Unit) {
+    val gameDuration = 3500L // 3.5 segundos
+    val targetTaps = 25 // 25 pulsaciones
+    var taps by remember { mutableStateOf(0) }
+    var timeLeft by remember { mutableStateOf(gameDuration / 1000 + 1) }
+    var isFinished by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < gameDuration) {
+            delay(100L)
+            val elapsed = System.currentTimeMillis() - startTime
+            timeLeft = (gameDuration - elapsed) / 1000 + 1
+        }
+        if (!isFinished) {
+            isFinished = true
+            onResult(taps >= targetTaps)
+        }
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("¡Pulsa el botón!", style = MaterialTheme.typography.titleMedium)
+        Text("Objetivo: $targetTaps | Tiempo: $timeLeft s", style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(8.dp))
+        LinearProgressIndicator(progress = { (taps.toFloat() / targetTaps).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = { if (!isFinished) taps++ },
+            modifier = Modifier.fillMaxWidth().height(80.dp),
+            enabled = !isFinished
+        ) {
+            Text(if (!isFinished) "¡PULSA! ($taps)" else "¡TIEMPO!", style = MaterialTheme.typography.headlineSmall)
+        }
+    }
+}
+
+@Composable
+fun MemorySequenceMinigame(onResult: (Boolean) -> Unit) {
+    val sequenceLength = 4
+    val sequence = remember { List(sequenceLength) { DadoSimbolo.values().random() } }
+    val playerInput = remember { mutableStateListOf<DadoSimbolo>() }
+    var gameState by remember { mutableStateOf("showing") }
+    var currentStepShown by remember { mutableStateOf(-1) }
+
+    LaunchedEffect(gameState) {
+        if (gameState == "showing") {
+            delay(500) // Pausa inicial
+            for (i in sequence.indices) {
+                currentStepShown = i
+                delay(600)
+                currentStepShown = -1
+                delay(300)
+            }
+            gameState = "playing"
+        }
+    }
+
+    LaunchedEffect(playerInput.size) {
+        if (gameState == "playing" && playerInput.isNotEmpty()) {
+            val lastIndex = playerInput.lastIndex
+            if (playerInput[lastIndex] != sequence[lastIndex]) {
+                gameState = "result"
+                onResult(false)
+            } else if (playerInput.size == sequence.size) {
+                gameState = "result"
+                onResult(true)
+            }
+        }
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        val statusText = when(gameState) {
+            "showing" -> "Memoriza la secuencia..."
+            "playing" -> "Tu turno: ${playerInput.size}/${sequence.size}"
+            else -> if (playerInput.toList() == sequence) "¡Correcto!" else "¡Fallaste!"
+        }
+        Text(statusText, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            (0 until sequenceLength).forEach { index ->
+                val symbol = if (gameState == "showing" && currentStepShown == index) sequence[index] else null
+                val inputSymbol = if(gameState == "playing") playerInput.getOrNull(index) else null
+
+                val color by animateColorAsState(
+                    targetValue = if (symbol != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    label = "sequence_color_$index"
+                )
+                Box(
+                    modifier = Modifier.size(40.dp).background(color, RoundedCornerShape(4.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (symbol != null) { // CORRECCIÓN: Mostrar el icono durante la fase de "showing"
+                        Icon(painter = getIconForDice(symbol), contentDescription = null, modifier = Modifier.size(24.dp))
+                    } else if (inputSymbol != null) { // Mantener el icono del input del jugador
+                        Icon(painter = getIconForDice(inputSymbol), contentDescription = null, modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            userScrollEnabled = false
+        ) {
+            items(DadoSimbolo.values()) { simbolo ->
+                Button(
+                    onClick = { if (gameState == "playing") playerInput.add(simbolo) },
+                    enabled = gameState == "playing",
+                    modifier = Modifier.size(60.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(painter = getIconForDice(simbolo), contentDescription = simbolo.name, modifier = Modifier.size(32.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TimingChallengeMinigame(onResult: (Boolean) -> Unit) {
+    var gameState by remember { mutableStateOf("ready") }
+    var targetPosition by remember { mutableStateOf(0f) }
+    val transition = rememberInfiniteTransition(label = "timing_challenge_transition")
+    val position by transition.animateFloat(
+        initialValue = -1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(1500, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "pulse_position"
+    )
+
+    LaunchedEffect(Unit) {
+        targetPosition = Random.nextFloat() * 1.4f - 0.7f // Zona aleatoria entre -0.7 y 0.7
+        gameState = "running"
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("¡Sincroniza el Pulso!", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(16.dp))
+        Box(
+            modifier = Modifier.fillMaxWidth().height(40.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(20.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.1f)
+                .align(BiasAlignment(horizontalBias = targetPosition, verticalBias = 0f))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+            )
+            Box(Modifier
+                .size(15.dp)
+                .align(BiasAlignment(horizontalBias = position, verticalBias = 0f))
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = {
+                if (gameState == "running") {
+                    gameState = "finished"
+                    val success = position in (targetPosition - 0.1f)..(targetPosition + 0.1f) // A slightly larger success zone for playability
+                    onResult(success)
+                }
+            },
+            enabled = gameState == "running",
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (gameState == "running") "¡SINCRONIZAR!" else "...")
+        }
+    }
+}
+
+@Composable
+fun CodeBreakingMinigame(onResult: (Boolean) -> Unit) {
+    val code = remember { (1..3).map { Random.nextInt(1, 10) }.joinToString("") }
+    var playerInput by remember { mutableStateOf("") }
+    var showCode by remember { mutableStateOf(true) }
+    var isFinished by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(1500) // Muestra el código por 1.5 segundos
+        showCode = false
+    }
+
+    LaunchedEffect(playerInput) {
+        if (playerInput.length == 3) {
+            isFinished = true
+            onResult(playerInput == code)
+        }
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Introduce el código", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Box(
+            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)).padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val displayText = when {
+                showCode -> code
+                isFinished && playerInput == code -> "¡CORRECTO!"
+                isFinished -> "¡ERROR!"
+                else -> playerInput.padEnd(3, '_')
+            }
+            Text(displayText, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            userScrollEnabled = false,
+            modifier = Modifier.width(200.dp)
+        ) {
+            items((1..9).toList()) { number ->
+                Button(
+                    onClick = { if (playerInput.length < 3) playerInput += number.toString() },
+                    enabled = !showCode && !isFinished
+                ) {
+                    Text(number.toString())
+                }
+            }
         }
     }
 }

@@ -53,7 +53,7 @@ fun PlayerInfoCard(player: Player) {
                     painter = getIconForCoin(),
                     contentDescription = "Monedas",
                     modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary // CORRECCIÓN: Usar color del tema
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
@@ -65,7 +65,7 @@ fun PlayerInfoCard(player: Player) {
                     painter = getIconForEnergy(),
                     contentDescription = "Energía Glitch",
                     modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.secondary
+                    tint = MaterialTheme.colorScheme.secondary // CORRECCIÓN: Usar color del tema
                 )
             }
         }

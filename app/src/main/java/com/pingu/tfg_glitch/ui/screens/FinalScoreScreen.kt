@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -228,12 +229,13 @@ private fun PlayerScoreCard(score: PlayerScore, rank: Int) {
                 Icon(
                     painter = getIconForPV(),
                     contentDescription = "Puntos de Victoria",
-                    modifier = Modifier.size(32.dp).padding(start = 4.dp)
+                    modifier = Modifier.size(32.dp).padding(start = 4.dp),
+                    tint = MaterialTheme.colorScheme.primary // Usa color del tema
                 )
             }
 
 
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             // Desglose de puntos
             ScoreDetailRow(label = "Monedas") {
@@ -307,7 +309,8 @@ private fun ValuePointsPair(
         Icon(
             painter = pointsIcon,
             contentDescription = "PV",
-            modifier = Modifier.size(18.dp).padding(start = 4.dp)
+            modifier = Modifier.size(18.dp).padding(start = 4.dp),
+            tint = LocalContentColor.current // Usa color del texto
         )
     }
 }
