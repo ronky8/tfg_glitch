@@ -6,18 +6,9 @@ import androidx.compose.ui.res.painterResource
 import com.pingu.tfg_glitch.R
 import com.pingu.tfg_glitch.data.DadoSimbolo
 
-/**
- * Funciones para gestionar los iconos personalizados de la aplicación.
- * Apunta a los recursos que importes en la carpeta res/drawable.
- */
 
-// Placeholder genérico por si un icono no se encuentra.
-// Crea un PNG/SVG simple con un signo de interrogación y guárdalo como `ic_placeholder`
 val placeholderIcon: Int = R.drawable.ic_placeholder
 
-/**
- * Obtiene el icono correspondiente a un ID de cultivo.
- */
 @Composable
 fun getIconForCrop(cropId: String): Painter {
     val resourceId = when (cropId) {
@@ -33,18 +24,11 @@ fun getIconForCrop(cropId: String): Painter {
     return painterResource(id = resourceId)
 }
 
-/**
- * Obtiene el icono de fondo para los dados.
- */
 @Composable
 fun getDiceBackground(): Painter {
-    // Asegúrate de tener un PNG/SVG llamado `ic_dado_fondo` en res/drawable
     return painterResource(id = R.drawable.ic_background_dado)
 }
 
-/**
- * Obtiene el icono correspondiente a un símbolo de dado.
- */
 @Composable
 fun getIconForDice(symbol: DadoSimbolo): Painter {
     val resourceId = when (symbol) {
@@ -58,9 +42,6 @@ fun getIconForDice(symbol: DadoSimbolo): Painter {
     return painterResource(id = resourceId)
 }
 
-/**
- * Obtiene el icono correspondiente a un ID de granjero.
- */
 @Composable
 fun getIconForGranjero(granjeroId: String): Painter {
     val resourceId = when (granjeroId) {
@@ -73,27 +54,18 @@ fun getIconForGranjero(granjeroId: String): Painter {
     return painterResource(id = resourceId)
 }
 
-/**
- * Obtiene el icono para Moneda como Painter.
- */
 @Composable
 fun getIconForCoin(): Painter {
     // Apunta a tu PNG/SVG para la moneda
     return painterResource(id = R.drawable.ic_moneda_sin)
 }
 
-/**
- * Obtiene el icono para Energía como Painter.
- */
 @Composable
 fun getIconForEnergy(): Painter {
     // Apunta a tu PNG/SVG para la energía
     return painterResource(id = R.drawable.ic_glitch)
 }
 
-/**
- * [NUEVO] Obtiene el icono para los Puntos de Victoria (PV) como Painter.
- */
 @Composable
 fun getIconForPV(): Painter {
     return painterResource(id = R.drawable.ic_pv_placeholder)

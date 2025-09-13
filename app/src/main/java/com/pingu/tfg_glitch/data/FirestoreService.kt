@@ -7,17 +7,12 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
 import android.util.Log
 
-/**
- * Service for interacting with Firestore for player and game data.
- */
+
 class FirestoreService {
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val playersCollection = db.collection("players")
     private val gamesCollection = db.collection("games")
 
-    /**
-     * Gets the real-time player data for a given player ID.
-     */
     fun getPlayer(playerId: String): Flow<Player?> = callbackFlow {
         val docRef = playersCollection.document(playerId)
         val subscription = docRef.addSnapshotListener { snapshot, error ->
@@ -33,9 +28,6 @@ class FirestoreService {
         awaitClose { subscription.remove() }
     }
 
-    /**
-     * Gets a real-time list of all players in a specific game.
-     */
     fun getPlayersInGame(gameId: String): Flow<List<Player>> = callbackFlow {
         val query = playersCollection.whereEqualTo("gameId", gameId)
         val subscription = query.addSnapshotListener { snapshot, error ->
@@ -53,5 +45,4 @@ class FirestoreService {
         awaitClose { subscription.remove() }
     }
 
-    // Note: getGame is handled by GameService for consistency.
 }

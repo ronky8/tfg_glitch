@@ -14,17 +14,13 @@ import com.google.firebase.firestore.Transaction
 import kotlin.random.Random
 import kotlin.math.max
 
-/**
- * Service for managing multiplayer game logic.
- */
+
 class GameService {
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val gamesCollection = db.collection("games")
     private val playersCollection = db.collection("players")
 
-    /**
-     * Generates a random 6-character alphanumeric code for the game.
-     */
+
     private fun generateGameCode(): String {
         val charPool: List<Char> = ('A'..'Z') + ('0'..'9')
         return (1..6)
@@ -33,12 +29,8 @@ class GameService {
             .joinToString("")
     }
 
-    /**
-     * [¡NUEVO!] Obtiene la lista de granjeros que aún no han sido elegidos en una partida.
-     */
     fun getAvailableGranjeros(gameId: String): Flow<List<Granjero>> = callbackFlow {
         val gameRef = gamesCollection.document(gameId)
-        // Usamos una corrutina para esperar el resultado de la llamada inicial
         try {
             val gameSnapshot = gameRef.get().await()
 
@@ -48,7 +40,6 @@ class GameService {
                 return@callbackFlow
             }
 
-            // Creamos un listener que se mantiene abierto hasta que el Flow se cancele
             val listener = playersCollection.whereEqualTo("gameId", gameId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -81,9 +72,6 @@ class GameService {
     }
 
 
-    /**
-     * [MODIFICADO] Creates a new game in Firestore and returns the game code and the host's player ID.
-     */
     suspend fun createGame(hostName: String, granjeroId: String): Pair<String, String> {
         val gameId = generateGameCode()
         val selectedObjectives = allGameObjectives.shuffled(Random).take(3).toMutableList()
@@ -126,10 +114,6 @@ class GameService {
         return Pair(newGame.id, hostPlayerId)
     }
 
-    /**
-     * [CORREGIDO] Creates a new game and a single player for "One Mobile Mode".
-     * Ahora inicializa 'playerOrder' y otros estados de la partida correctamente.
-     */
     suspend fun createOneMobileGame(): Pair<String, String> {
         val gameId = generateGameCode()
         val selectedObjectives = allGameObjectives.shuffled(Random).take(3).toMutableList()
@@ -161,7 +145,7 @@ class GameService {
                 game.hostPlayerId = playerId
                 game.currentPlayerTurnId = playerId
                 game.roundPhase = "PLAYER_ACTIONS"
-                game.playerOrder.add(playerId) // <-- ¡LA CORRECCIÓN CLAVE!
+                game.playerOrder.add(playerId) //
                 game.isStarted = true
                 game.roundNumber = 1
                 transaction.set(gameRef, game)
@@ -172,9 +156,6 @@ class GameService {
     }
 
 
-    /**
-     * Gets the real-time game state.
-     */
     fun getGame(gameId: String): Flow<Game?> = callbackFlow {
         val subscription = gamesCollection.document(gameId)
             .addSnapshotListener { snapshot, error ->
@@ -189,9 +170,7 @@ class GameService {
         awaitClose { subscription.remove() }
     }
 
-    /**
-     * Adds a player to an existing game.
-     */
+
     suspend fun addPlayerToGame(gameId: String, playerId: String) {
         db.runTransaction { transaction ->
             val gameRef = gamesCollection.document(gameId)
@@ -203,9 +182,7 @@ class GameService {
         }.await()
     }
 
-    /**
-     * [MODIFICADO] Adds a new player to the game by name and returns the newly generated player ID.
-     */
+
     suspend fun addPlayerToGameByName(
         gameId: String,
         playerName: String,
@@ -242,16 +219,12 @@ class GameService {
         return newPlayerId
     }
 
-    /**
-     * Starts a game.
-     */
+
     suspend fun startGame(gameId: String) {
         gamesCollection.document(gameId).update("isStarted", true).await()
     }
 
-    /**
-     * Updates the market prices, the last event, and event effects of a game.
-     */
+
     suspend fun updateGameMarketAndEvent(
         gameId: String,
         marketPrices: MarketPrices,
@@ -270,9 +243,7 @@ class GameService {
         ).await()
     }
 
-    /**
-     * Marks a game as ended in Firestore.
-     */
+
     suspend fun markGameAsEnded(gameId: String) {
         try {
             gamesCollection.document(gameId).update("hasGameEnded", true).await()
@@ -286,9 +257,7 @@ class GameService {
         }
     }
 
-    /**
-     * Ends the game and triggers final score calculation.
-     */
+
     suspend fun endGameByPoints(gameId: String) {
         try {
             gamesCollection.document(gameId).update("hasGameEnded", true).await()
@@ -302,9 +271,6 @@ class GameService {
         }
     }
 
-    /**
-     * Performs the actual deletion of a game and all its associated players from Firestore.
-     */
     suspend fun cleanUpGameData(gameId: String) {
         val batch: WriteBatch = db.batch()
         val gameRef = gamesCollection.document(gameId)
@@ -317,9 +283,6 @@ class GameService {
         Log.d("GameService", "Game $gameId and associated players cleaned up successfully.")
     }
 
-    /**
-     * Updates the resources of a player by their ID.
-     */
     suspend fun updatePlayerResources(playerId: String, money: Int, glitchEnergy: Int) {
         val playerRef = playersCollection.document(playerId)
         playerRef.update(
@@ -330,9 +293,6 @@ class GameService {
         ).await()
     }
 
-    /**
-     * Updates the manual bonus PV of a player.
-     */
     suspend fun adjustPlayerManualBonusPV(playerId: String, pvDelta: Int): Boolean {
         val playerRef = playersCollection.document(playerId)
         return try {
@@ -356,9 +316,6 @@ class GameService {
         }
     }
 
-    /**
-     * [¡NUEVO!] Permite al anfitrión añadir o quitar cultivos del inventario de un jugador.
-     */
     suspend fun adjustPlayerInventory(playerId: String, cropId: String, quantityDelta: Int): Boolean {
         val playerRef = playersCollection.document(playerId)
         return try {
@@ -385,7 +342,7 @@ class GameService {
                     player.inventario.add(newCrop)
                 }
                 transaction.set(playerRef, player)
-                null // Transacción completada
+                null
             }.await()
             true
         } catch (e: Exception) {
@@ -395,25 +352,16 @@ class GameService {
     }
 
 
-    /**
-     * Updates the name of a player by their ID.
-     */
     suspend fun updatePlayerName(playerId: String, newName: String) {
         val playerRef = playersCollection.document(playerId)
         playerRef.update("name", newName).await()
     }
 
-    /**
-     * Updates a player's inventory.
-     */
     suspend fun updatePlayerInventory(playerId: String, inventory: List<CultivoInventario>) {
         val playerRef = playersCollection.document(playerId)
         playerRef.update("inventario", inventory).await()
     }
 
-    /**
-     * Updates the dice-related state of a player in Firestore.
-     */
     suspend fun updatePlayerDiceState(
         playerId: String,
         diceRoll: List<DadoSimbolo>,
@@ -432,9 +380,6 @@ class GameService {
         ).await()
     }
 
-    /**
-     * Manually adjusts a player's money and glitch energy.
-     */
     suspend fun adjustPlayerResourcesManually(
         playerId: String,
         moneyDelta: Int,
@@ -460,10 +405,6 @@ class GameService {
     }
 
 
-    /**
-     * [¡NUEVO!] Elimina a un jugador de la partida de forma robusta.
-     * Esta función ahora necesita el gameId para actualizar el estado de la partida.
-     */
     suspend fun deletePlayerFromGame(gameId: String, playerId: String) {
         val gameRef = gamesCollection.document(gameId)
         val playerRef = playersCollection.document(playerId)
@@ -508,9 +449,6 @@ class GameService {
         }.await()
     }
 
-    /**
-     * Simulates the rolling of 4 custom dice and returns the resulting symbols.
-     */
     suspend fun rollDice(playerId: String) {
         val diceResults = List(4) { DadoSimbolo.values().random() }
         playersCollection.document(playerId).update(
@@ -524,9 +462,6 @@ class GameService {
         ).await()
     }
 
-    /**
-     * Simulates rerolling selected dice and returns the new resulting symbols.
-     */
     suspend fun rerollDice(
         playerId: String,
         currentDiceRoll: List<DadoSimbolo>,
@@ -543,9 +478,6 @@ class GameService {
         ).await()
     }
 
-    /**
-     * Starts a mystery encounter for a player.
-     */
     suspend fun startMysteryEncounter(playerId: String, isOneMobileMode: Boolean = false) {
         val playerRef = playersCollection.document(playerId)
         db.runTransaction { transaction ->
@@ -561,9 +493,6 @@ class GameService {
         }.await()
     }
 
-    /**
-     * Resolves the outcome of a mystery encounter based on player choice.
-     */
     suspend fun resolveMysteryOutcome(playerId: String, choiceId: String? = null) {
         val playerRef = playersCollection.document(playerId)
         db.runTransaction { transaction ->
@@ -606,9 +535,6 @@ class GameService {
         }.await()
     }
 
-    /**
-     * Resolves the outcome of a minigame encounter.
-     */
     suspend fun resolveMinigameOutcome(playerId: String, wasSuccessful: Boolean) {
         val playerRef = playersCollection.document(playerId)
         db.runTransaction { transaction ->
@@ -635,9 +561,6 @@ class GameService {
         }.await()
     }
 
-    /**
-     * Clears the mystery result so the dialog doesn't reappear.
-     */
     suspend fun clearMysteryResult(playerId: String) {
         val playerRef = playersCollection.document(playerId)
         try {
@@ -647,9 +570,6 @@ class GameService {
         }
     }
 
-    /**
-     * Applies the effects of the dice roll to the player's resources and game state.
-     */
     suspend fun applyDiceEffects(playerId: String, diceResults: List<DadoSimbolo>): String {
         val playerRef = playersCollection.document(playerId)
         var moneyChange = 0
@@ -692,12 +612,6 @@ class GameService {
 
         return feedbackMessage.toString()
     }
-
-    /**
-     * [CORREGIDO] Permite a un jugador vender un cultivo de su inventario.
-     * La función ahora calcula el precio de venta real basándose en el estado de la partida,
-     * para asegurar que los eventos de mercado temporales se apliquen correctamente.
-     */
     suspend fun sellCrop(gameId: String, playerId: String, cropId: String, quantity: Int, totalEarned: Int): Boolean {
         val playerRef = playersCollection.document(playerId)
         val gameRef = gamesCollection.document(gameId)
@@ -735,9 +649,6 @@ class GameService {
         }
     }
 
-    /**
-     * Adds a crop to the player's digital inventory.
-     */
     suspend fun addCropToInventory(
         playerId: String,
         cropId: String,
@@ -772,9 +683,6 @@ class GameService {
         }
     }
 
-    /**
-     * [MODIFICADO] Advances the turn to the next player in the game or switches to the market phase.
-     */
     suspend fun advanceTurn(gameId: String, currentPlayerId: String): String? {
         val gameRef = gamesCollection.document(gameId)
         val playerRef = playersCollection.document(currentPlayerId)
@@ -794,8 +702,6 @@ class GameService {
                     game.playersFinishedTurn.clear()
                     game.currentPlayerTurnId = null
 
-                    // Asegurarse de que el estado de 'haUsadoHabilidadActiva' del Comerciante se resetea al entrar en el mercado
-                    // Esto es necesario para que pueda usar su habilidad activa una vez por ronda, no una vez por turno de dados
                     val players = game.playerIds.mapNotNull { transaction.get(playersCollection.document(it)).toObject<Player>() }
                     players.forEach {
                         if (it.haUsadoHabilidadActiva && it.granjero?.id == "comerciante_sombrio") {
@@ -835,9 +741,6 @@ class GameService {
         }
     }
 
-    /**
-     * Marks that a player has finished their actions in the market phase.
-     */
     suspend fun playerFinishedMarket(gameId: String, playerId: String) {
         val gameRef = gamesCollection.document(gameId)
         val playerRef = playersCollection.document(playerId)
@@ -873,9 +776,6 @@ class GameService {
         }
     }
 
-    /**
-     * Calculates the new price for a crop with a tendency towards its base value.
-     */
     private fun calculateNewPrice(currentPrice: Int, basePrice: Int): Int {
         val probIncrease = when {
             currentPrice < basePrice -> 70
@@ -886,11 +786,6 @@ class GameService {
         return max(1, currentPrice + change)
     }
 
-    /**
-     * [CORREGIDO] Advances the game to the next round (host only).
-     * Ahora, el efecto de "Interferencia de Señal" se resetea correctamente al
-     * pasar de ronda, evitando que los precios se queden reducidos para siempre.
-     */
     suspend fun advanceRound(gameId: String): Boolean {
         val gameRef = gamesCollection.document(gameId)
         return try {
@@ -907,7 +802,6 @@ class GameService {
                     return@runTransaction false
                 }
 
-                // Apply Global Event Effects
                 when (game.lastEvent?.name) {
                     "Impuesto Sorpresa" -> {
                         playersInGame.forEach { player ->
@@ -950,17 +844,14 @@ class GameService {
                     }
                 }
 
-                // Update Market Prices & Round Event
                 val basePrices = allCrops.associate { it.id to it.valorVentaBase }
                 var currentPrices = game.marketPrices
                 var newEvent: GlitchEvent? = null
                 var newSupplyFailureActive = game.supplyFailureActive
                 var newSignalInterferenceActive = false
 
-                // Reset temporary effects from previous round
                 if (game.signalInterferenceActive) newSignalInterferenceActive = false
 
-                // Calculate new base market prices
                 val newMarketPrices = MarketPrices(
                     zanahoria = calculateNewPrice(
                         currentPrices.zanahoria,
@@ -986,10 +877,8 @@ class GameService {
                     )
                 )
 
-                // [CORRECCIÓN DEL BUG] Asignar siempre los nuevos precios base
                 currentPrices = newMarketPrices
 
-                // Generate new round event and apply its effects
                 val playersWithGlitchEnergy = playersInGame.filter { it.glitchEnergy > 0 }
                 if (Random.nextDouble() < 0.60 && playersWithGlitchEnergy.isNotEmpty()) {
                     val possibleEvents =
@@ -1025,7 +914,6 @@ class GameService {
                     }
                 }
 
-                // Reset players state for the new round
                 playersInGame.forEach { player ->
                     val playerRef = playersCollection.document(player.id)
                     transaction.set(
@@ -1043,7 +931,6 @@ class GameService {
                     )
                 }
 
-                // Update game state for the new round
                 game.marketPrices = currentPrices
                 game.lastEvent = newEvent
                 game.supplyFailureActive = newSupplyFailureActive
@@ -1063,10 +950,6 @@ class GameService {
         }
     }
 
-    /**
-     * [CORREGIDO] Advances the game to the next round specifically for "One Mobile Mode".
-     * Se alinea con la lógica de 'advanceRound' para mayor consistencia.
-     */
     suspend fun advanceOneMobileRound(gameId: String): Boolean {
         val gameRef = gamesCollection.document(gameId)
         return try {
@@ -1122,17 +1005,14 @@ class GameService {
                     }
                 }
 
-                // Update Market Prices & Round Event
                 val basePrices = allCrops.associate { it.id to it.valorVentaBase }
                 var currentPrices = game.marketPrices
                 var newEvent: GlitchEvent? = null
                 var newSupplyFailureActive = game.supplyFailureActive
                 var newSignalInterferenceActive = false
 
-                // Reset temporary effects from previous round
                 if (game.signalInterferenceActive) newSignalInterferenceActive = false
 
-                // Calculate new base market prices
                 val newMarketPrices = MarketPrices(
                     zanahoria = calculateNewPrice(
                         currentPrices.zanahoria,
@@ -1158,10 +1038,7 @@ class GameService {
                     )
                 )
 
-                // [CORRECCIÓN DEL BUG] Asignar siempre los nuevos precios base
                 currentPrices = newMarketPrices
-
-                // Generate new round event and apply its effects
                 val playersWithGlitchEnergy = playersInGame.filter { it.glitchEnergy > 0 }
                 if (Random.nextDouble() < 0.60 && playersWithGlitchEnergy.isNotEmpty()) {
                     val possibleEvents =
@@ -1197,7 +1074,6 @@ class GameService {
                     }
                 }
 
-                // Reset players state for the new round
                 playersInGame.forEach { player ->
                     val playerRef = playersCollection.document(player.id)
                     transaction.set(
@@ -1215,7 +1091,6 @@ class GameService {
                     )
                 }
 
-                // Update game state for the new round
                 game.marketPrices = currentPrices
                 game.lastEvent = newEvent
                 game.supplyFailureActive = newSupplyFailureActive
@@ -1235,7 +1110,6 @@ class GameService {
         }
     }
 
-
     suspend fun updatePlayerOrderAndStartGame(gameId: String, orderedPlayerIds: List<String>) {
         val gameRef = gamesCollection.document(gameId)
         db.runTransaction { transaction ->
@@ -1248,10 +1122,6 @@ class GameService {
         }.await()
     }
 
-    /**
-     * Allows the host to force the game to advance to the next player.
-     * Use this when a player's turn is stuck.
-     */
     suspend fun forceAdvanceTurn(gameId: String, currentStuckPlayerId: String) {
         val gameRef = gamesCollection.document(gameId)
         val playerRef = playersCollection.document(currentStuckPlayerId)
@@ -1260,15 +1130,12 @@ class GameService {
             val stuckPlayer = transaction.get(playerRef).toObject<Player>()
 
             if (game != null && stuckPlayer != null) {
-                // Find next player in the established order
                 val playerOrder = game.playerOrder
                 val currentIndex = playerOrder.indexOf(currentStuckPlayerId)
                 if (currentIndex != -1) {
                     val nextIndex = (currentIndex + 1) % playerOrder.size
                     val nextPlayerId = playerOrder[nextIndex]
                     game.currentPlayerTurnId = nextPlayerId
-
-                    // Reset stuck player's state
                     stuckPlayer.currentDiceRoll = emptyList()
                     stuckPlayer.rollPhase = 0
                     stuckPlayer.hasRerolled = false
@@ -1285,9 +1152,7 @@ class GameService {
         }.await()
     }
 
-    /**
-     * [¡NUEVO!] Usa la habilidad activa del Ingeniero Glitch para cambiar la cara de un dado.
-     */
+
     suspend fun usarActivableIngeniero(
         playerId: String,
         dieIndex: Int,
@@ -1300,7 +1165,7 @@ class GameService {
                     ?: throw Exception("Player not found")
                 if (player.granjero?.id == "ingeniero_glitch" &&
                     player.glitchEnergy >= 1 &&
-                    !player.haUsadoHabilidadActiva && // ¡NUEVO! Comprueba si ya se usó
+                    !player.haUsadoHabilidadActiva &&
                     dieIndex in player.currentDiceRoll.indices
                 ) {
 
@@ -1320,10 +1185,6 @@ class GameService {
             false
         }
     }
-
-    /**
-     * Usa la habilidad pasiva del Ingeniero Glitch para relanzar un solo dado.
-     */
     suspend fun usarPasivaIngeniero(playerId: String, dieIndex: Int) {
         val playerRef = playersCollection.document(playerId)
         db.runTransaction { transaction ->
@@ -1338,9 +1199,6 @@ class GameService {
         }.await()
     }
 
-    /**
-     * [CORREGIDO] Habilidad activa de la Botánica Mutante.
-     */
     suspend fun usarActivableBotanica(playerId: String): Boolean {
         val playerRef = playersCollection.document(playerId)
         return try {
@@ -1353,7 +1211,6 @@ class GameService {
                 ) {
                     player.glitchEnergy -= 2
                     player.haUsadoHabilidadActiva = true
-                    // La lógica del efecto es física, pero la app registra el coste y el uso
                     transaction.set(playerRef, player)
                     true
                 } else {
@@ -1366,9 +1223,6 @@ class GameService {
         }
     }
 
-    /**
-     * [CORREGIDO] Habilidad activa del Comerciante Sombrio.
-     */
     suspend fun usarActivableComerciante(playerId: String): Boolean {
         val playerRef = playersCollection.document(playerId)
         return try {
@@ -1394,9 +1248,6 @@ class GameService {
         }
     }
 
-    /**
-     * [CORREGIDO] Habilidad activa de la Visionaria Pixel.
-     */
     suspend fun usarActivableVisionaria(playerId: String): Boolean {
         val playerRef = playersCollection.document(playerId)
         return try {
@@ -1409,7 +1260,6 @@ class GameService {
                 ) {
                     player.glitchEnergy -= 1
                     player.haUsadoHabilidadActiva = true
-                    // La lógica del efecto es física, pero la app registra el coste y el uso
                     transaction.set(playerRef, player)
                     true
                 } else {
@@ -1422,9 +1272,6 @@ class GameService {
         }
     }
 
-    /**
-     * Attempts to claim an objective for a player.
-     */
     suspend fun claimObjective(gameId: String, playerId: String, objectiveId: String): String {
         val gameRef = gamesCollection.document(gameId)
         val playerRef = playersCollection.document(playerId)
@@ -1510,12 +1357,6 @@ class GameService {
                         canClaim = true
                         feedback = "Objetivo de ronda reclamado."
                     }
-                    "dice_roll_all_same" -> {
-                        val firstSymbol = player.currentDiceRoll.firstOrNull()
-                        val allSame = firstSymbol != null && player.currentDiceRoll.all { it == firstSymbol }
-                        if (allSame && player.currentDiceRoll.isNotEmpty()) { canClaim = true }
-                        else { feedback = "Necesitas una tirada de 4 dados con el mismo símbolo." }
-                    }
                     else -> feedback = "Tipo de objetivo desconocido."
                 }
 
@@ -1523,8 +1364,6 @@ class GameService {
                     player.objectivesClaimed.add(objective.id)
                     player.money += objective.reward.moneyChange
                     player.glitchEnergy += objective.reward.energyChange
-
-                    // CORREGIDO: Usamos la función put para asignar el valor, no la propiedad de una lista
                     game.claimedObjectivesByPlayer.put(objectiveId, playerId)
 
                     transaction.set(playerRef, player)

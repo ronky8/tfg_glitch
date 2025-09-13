@@ -19,7 +19,6 @@ import java.util.Locale
 // Función auxiliar para capitalizar la primera letra de cada palabra
 fun String.capitalizeWords(): String = this.split(" ").joinToString(" ") { it.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() } }
 
-// Composable para cada elemento del mercado (ahora compartido)
 @Composable
 fun MarketItem(cropName: String, price: Int, modifier: Modifier = Modifier) {
     Card(

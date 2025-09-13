@@ -529,13 +529,13 @@ private fun ActionButtons(
                         }
                     }
                     2 -> {
-                        // Botón de resolver misterio (opcional)
+                        // Botón de resolver misterio
                         if (playerState.mysteryButtonsRemaining > 0) {
                             Button(onClick = onStartMystery, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
                                 Text("Resolver Misterio (${playerState.mysteryButtonsRemaining})")
                             }
                         }
-                        // Botón para terminar el turno (siempre visible en la fase 2)
+                        // Botón para terminar el turno
                         Button(onClick = onEndTurn, enabled = canPerformActions, modifier = Modifier.fillMaxWidth().height(50.dp)) {
                             Text("Terminar Turno")
                         }
@@ -545,7 +545,7 @@ private fun ActionButtons(
         }
     }
 
-    // Diálogo para la pasiva del Ingeniero (no necesita cambios)
+    // Diálogo para la pasiva del Ingeniero
     if (showEngineerPassiveReroll) {
         AlertDialog(
             onDismissRequest = { showEngineerPassiveReroll = false },
@@ -594,7 +594,7 @@ private fun HabilityButtons(
                         else -> Triple({}, 0, false)
                     }
 
-                    val buttonColors = if (granjero.id == "ingeniero_glitch") ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+                    if (granjero.id == "ingeniero_glitch") ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
 
                     Button(
                         onClick = onClick,
@@ -1035,9 +1035,6 @@ fun CodeBreakingMinigame(onResult: (Boolean) -> Unit) {
 }
 
 
-// ========================================================================
-// --- Preview ---
-// ========================================================================
 
 @Preview(showBackground = true)
 @Composable

@@ -177,9 +177,6 @@ fun ObjectivesScreen(gameId: String, currentPlayerId: String) {
 // --- Sub-componentes de la pantalla ---
 // ========================================================================
 
-/**
- * Tarjeta que muestra la información de un objetivo y la opción de reclamarlo.
- */
 @Composable
 private fun ObjectiveCard(
     objective: Objective,

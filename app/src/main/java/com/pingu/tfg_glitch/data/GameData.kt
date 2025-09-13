@@ -47,13 +47,7 @@ data class Granjero(
     val habilidadPasiva: String = "",
     val habilidadActivable: String = "",
     val costeActivacion: String = "",
-    val iconName: String = "help_outline" // Usaremos esto para asociar un icono
-)
-
-data class MejoraGlitch(
-    val id: String = UUID.randomUUID().toString(),
-    val nombre: String = "",
-    val efecto: String = ""
+    val iconName: String = "help_outline"
 )
 
 data class GlitchEvent(
@@ -81,7 +75,7 @@ data class CultivoInventario(
     val pvFinalJuego: Int = 0
 )
 
-// --- Estructuras para la Mecánica de Misterio ---
+
 data class MysteryOutcome(
     val description: String = "",
     val moneyChange: Int = 0,
@@ -145,15 +139,15 @@ data class Player(
     var currentDiceRoll: List<DadoSimbolo> = emptyList(),
     var rollPhase: Int = 0,
     var hasRerolled: Boolean = false,
-    var haUsadoPasivaIngeniero: Boolean = false, // Para la pasiva del Ingeniero
-    var haUsadoHabilidadActiva: Boolean = false, // ¡NUEVO! Para controlar la habilidad activa
+    var haUsadoPasivaIngeniero: Boolean = false,
+    var haUsadoHabilidadActiva: Boolean = false,
     var mysteryButtonsRemaining: Int = 0,
     val objectivesClaimed: MutableList<String> = mutableListOf(),
     var totalScore: Int = 0,
     var manualBonusPV: Int = 0,
     var activeMysteryId: String? = null,
     var lastMysteryResult: String? = null,
-    var cropsSoldThisMarketPhase: Int = 0 // [¡NUEVO!] Contador para la habilidad pasiva del Comerciante
+    var cropsSoldThisMarketPhase: Int = 0
 )
 
 data class MarketPrices(

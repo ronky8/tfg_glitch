@@ -1,6 +1,5 @@
 package com.pingu.tfg_glitch.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -17,8 +16,8 @@ private val DarkColorScheme = darkColorScheme(
     background = BackgroundDark,
     surface = SurfaceDark,
     onSurface = OnSurfaceText,
-    onSurfaceVariant = TextLight, // Un color de texto secundario más suave
-    surfaceVariant = DarkCard, // Para tarjetas y elementos elevados
+    onSurfaceVariant = TextLight,
+    surfaceVariant = DarkCard,
     error = ErrorRed,
     onError = Color.Black
 )
@@ -29,7 +28,7 @@ private val LightColorScheme = lightColorScheme(
     onPrimary = Color.White,
     secondary = SecondaryGreen,
     tertiary = InfoBlue,
-    background = Color(0xFFF5F5F5), // Un gris muy claro
+    background = Color(0xFFF5F5F5),
     surface = Color.White,
     onSurface = Color.Black,
     error = WarningRed,
@@ -70,10 +69,6 @@ private val TierraGlitchColorScheme = darkColorScheme(
 
 @Composable
 fun GranjaGlitchAppTheme(
-    // Por defecto, usa el tema oscuro, pero puedes cambiarlo aquí
-    darkTheme: Boolean = true,
-    // Puedes cambiar entre los temas disponibles
-    // Ejemplo: `selectedTheme = "PixelGlitch"` para usar el nuevo tema
     selectedTheme: String = "Dark",
     content: @Composable () -> Unit
 ) {

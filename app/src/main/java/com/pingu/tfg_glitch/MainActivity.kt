@@ -7,7 +7,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Storefront
@@ -32,9 +31,8 @@ import com.pingu.tfg_glitch.ui.theme.GranjaGlitchAppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import android.util.Log
 
-// [NUEVO] Enum para definir los estados de la música de fondo
+// Enum para definir los estados de la música de fondo
 private enum class MusicState { MENU, GAME, NONE }
 
 class MainActivity : ComponentActivity() {
@@ -49,7 +47,7 @@ class MainActivity : ComponentActivity() {
 
             onBackPressedDispatcher.addCallback(this, true) {
                 when (currentScreen.value) {
-                    "game" -> { /* No hacer nada para evitar salir por accidente */ }
+                    "game" -> {}
                     "mainMenu" -> finish()
                     else -> backPressTriggered = true
                 }
@@ -108,10 +106,10 @@ fun AppNavigation(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // --- [LÓGICA DE AUDIO CORREGIDA] ---
+    // Lógica de audio
     var currentMusicState by remember { mutableStateOf(MusicState.NONE) }
 
-    // Este efecto DECIDE qué música debería sonar basándose en la pantalla actual
+    // Este efecto decide qué música debería sonar basándose en la pantalla actual
     LaunchedEffect(currentScreen) {
         val newMusicState = when (currentScreen) {
             "game", "oneMobileMode", "finalScore" -> MusicState.GAME
@@ -123,7 +121,7 @@ fun AppNavigation(
         }
     }
 
-    // Este efecto REPRODUCE la música solo cuando el estado musical cambia
+    // Este efecto reproduce la música solo cuando el estado musical cambia
     LaunchedEffect(currentMusicState) {
         when (currentMusicState) {
             MusicState.MENU -> SoundManager.playMenuMusic(context)
@@ -437,8 +435,7 @@ fun GameScreen(
                     "objectives" -> ObjectivesScreen(gameId = gameId, currentPlayerId = currentPlayerId)
                     "players" -> PlayerManagementScreen(
                         gameId = gameId,
-                        currentPlayerId = currentPlayerId,
-                        onGameEnded = onGameEnded
+                        currentPlayerId = currentPlayerId
                     )
                 }
             }

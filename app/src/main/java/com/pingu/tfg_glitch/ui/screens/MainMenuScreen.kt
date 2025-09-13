@@ -32,7 +32,7 @@ fun MainMenuScreen(
 
         // Título de la aplicación
         Text(
-            text = "Granja Glitch",
+            text = "TerraByte",
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
             color = AccentGold,
@@ -75,7 +75,7 @@ fun MainMenuScreen(
                 )
             }
 
-            // Botón para ver las reglas (estilo secundario)
+            // Botón para ver las reglas
             OutlinedButton(
                 onClick = onViewRules,
                 modifier = Modifier

@@ -35,8 +35,7 @@ private val gameService = GameService()
 @Composable
 fun PlayerManagementScreen(
     gameId: String,
-    currentPlayerId: String,
-    onGameEnded: () -> Unit
+    currentPlayerId: String
 ) {
     // --- Estados ---
     val game by gameService.getGame(gameId).collectAsState(initial = null)
@@ -363,7 +362,7 @@ private fun EndGameDialog(
 }
 
 /**
- * [NUEVO] Diálogo para gestionar el inventario de un jugador.
+ *Diálogo para gestionar el inventario de un jugador.
  */
 @Composable
 private fun InventoryManagementDialog(
@@ -424,7 +423,7 @@ private fun InventoryManagementDialog(
 fun PlayerManagementScreenPreview() {
     GranjaGlitchAppTheme {
         Surface {
-            PlayerManagementScreen(gameId = "sample", currentPlayerId = "host", onGameEnded = {})
+            PlayerManagementScreen(gameId = "sample", currentPlayerId = "host")
         }
     }
 }

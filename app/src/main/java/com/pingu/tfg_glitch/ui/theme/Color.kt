@@ -4,7 +4,6 @@ import androidx.compose.ui.graphics.Color
 
 // Paleta de Material Design Estándar
 val PrimaryPurple = Color(0xFF6200EE)
-val PrimaryVariantPurple = Color(0xFF3700B3)
 val SecondaryGreen = Color(0xFF03DAC6)
 val BackgroundDark = Color(0xFF121212)
 val SurfaceDark = Color(0xFF1E1E1E)
@@ -14,7 +13,6 @@ val ErrorRed = Color(0xFFCF6679)
 
 // Colores de Acento y Estado
 val AccentGold = Color(0xFFFFD700)
-val PositiveGreen = Color(0xFF66BB6A)
 val WarningRed = Color(0xFFEF5350)
 val InfoBlue = Color(0xFF42A5F5)
 
@@ -33,7 +31,7 @@ val GlitchDarkCard = Color(0xFF2D3748)
 val GlitchMarronOscuro = Color(0xFF3E2723)
 val GlitchGrisOscuro = Color(0xFF4E342E)
 val GlitchMarronClaro = Color(0xFF6D4C41)
-val GlitchBeige = Color(0xFFF5F5DC)
+val GlitchBeige = Color(0xFFF700FF)
 val GlitchGrisClaro = Color(0xFFBCAAA4)
 val GlitchLila = Color(0xFF8E24AA)
 

@@ -181,7 +181,7 @@ fun OneMobileScreen(
 
 
 // ========================================================================
-// --- Sub-componentes de la pantalla (Restaurados) ---
+// --- Sub-componentes de la pantalla ---
 // ========================================================================
 
 @Composable
@@ -314,10 +314,6 @@ private fun ActionButtons(onActivateMystery: () -> Unit, onAdvanceRound: () -> U
         }
     }
 }
-
-// ========================================================================
-// --- Preview ---
-// ========================================================================
 
 @Preview(showBackground = true)
 @Composable

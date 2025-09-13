@@ -18,20 +18,12 @@ class UserDataStore(private val context: Context) {
         private val PLAYER_ID_KEY = stringPreferencesKey("player_id")
     }
 
-    /**
-     * Guarda el ID de la partida y del jugador en el almacenamiento local.
-     */
     suspend fun saveSession(gameId: String, playerId: String) {
         context.dataStore.edit { preferences ->
             preferences[GAME_ID_KEY] = gameId
             preferences[PLAYER_ID_KEY] = playerId
         }
     }
-
-    /**
-     * Lee la sesión guardada del almacenamiento local.
-     * @return Un par de String (gameId, playerId) si existe, o null en caso contrario.
-     */
     suspend fun readSession(): Pair<String, String>? {
         val preferences = context.dataStore.data.first()
         val gameId = preferences[GAME_ID_KEY]
@@ -43,9 +35,6 @@ class UserDataStore(private val context: Context) {
         }
     }
 
-    /**
-     * [¡NUEVO!] Elimina la sesión guardada del almacenamiento local.
-     */
     suspend fun clearSession() {
         context.dataStore.edit { preferences ->
             preferences.clear()
