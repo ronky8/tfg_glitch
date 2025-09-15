@@ -21,7 +21,6 @@ class FirestoreService {
                 close(error)
                 return@addSnapshotListener
             }
-            // Asegurarse de que el ID del documento se asigna a la propiedad 'id' del objeto Player
             val player = snapshot?.toObject<Player>()?.copy(id = snapshot.id)
             trySend(player)
         }
@@ -36,7 +35,6 @@ class FirestoreService {
                 close(error)
                 return@addSnapshotListener
             }
-            // Asegurarse de que el ID de cada documento se asigna a la propiedad 'id' de cada objeto Player
             val players = snapshot?.documents?.mapNotNull { doc ->
                 doc.toObject<Player>()?.copy(id = doc.id)
             } ?: emptyList()

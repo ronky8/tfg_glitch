@@ -31,9 +31,9 @@ val GlitchDarkCard = Color(0xFF2D3748)
 val GlitchMarronOscuro = Color(0xFF3E2723)
 val GlitchGrisOscuro = Color(0xFF4E342E)
 val GlitchMarronClaro = Color(0xFF6D4C41)
-val GlitchBeige = Color(0xFFF700FF)
+val GlitchBeige = Color(0xFFF68BFF)
 val GlitchGrisClaro = Color(0xFFBCAAA4)
-val GlitchLila = Color(0xFF8E24AA)
+val GlitchLila = Color(0xFF7600A2)
 
 // Corregido: Variables de la paleta original que faltaban
 val DarkCard = Color(0xFF2D3748)
