@@ -22,16 +22,10 @@ object SoundManager {
         isInitialized = true
     }
 
-    /**
-     * Reproduce la música del menú. Si ya está sonando, no hace nada.
-     */
     fun playMenuMusic(context: Context) {
         playMusic(context, R.raw.music_menu)
     }
 
-    /**
-     * Reproduce la música de la partida.
-     */
     fun playGameMusic(context: Context) {
         playMusic(context, R.raw.music_game)
     }
@@ -48,32 +42,20 @@ object SoundManager {
         }
     }
 
-    /**
-     * Detiene la música de fondo.
-     */
     fun stopMusic() {
         backgroundMusicPlayer?.stop()
         backgroundMusicPlayer?.release()
         backgroundMusicPlayer = null
     }
 
-    /**
-     * Pausa la música (cuando la app va a segundo plano).
-     */
     fun pauseMusic() {
         backgroundMusicPlayer?.pause()
     }
 
-    /**
-     * Reanuda la música (cuando la app vuelve al primer plano).
-     */
     fun resumeMusic() {
         backgroundMusicPlayer?.start()
     }
 
-    /**
-     * Libera los recursos cuando la app se cierra.
-     */
     fun release() {
         stopMusic()
         isInitialized = false

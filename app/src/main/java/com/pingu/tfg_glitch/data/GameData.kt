@@ -1,8 +1,6 @@
 package com.pingu.tfg_glitch.data
 
 import java.util.UUID
-import kotlin.math.max
-import android.util.Log
 
 // --- Enums y Clases de Datos del Juego ---
 enum class DadoSimbolo { GLITCH, CRECIMIENTO, ENERGIA, MONEDA, MISTERIO, PLANTAR }

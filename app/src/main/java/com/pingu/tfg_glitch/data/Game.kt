@@ -1,7 +1,5 @@
 package com.pingu.tfg_glitch.data
 
-import java.util.UUID
-
 data class Game(
     val id: String = "",
     val playerIds: MutableList<String> = mutableListOf(),

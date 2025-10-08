@@ -35,7 +35,6 @@ private val LightColorScheme = lightColorScheme(
     onError = Color.White
 )
 
-// Paleta "Pixel Glitch" más vibrante y con un estilo retro
 private val PixelGlitchColorScheme = darkColorScheme(
     primary = GlitchPurple,
     onPrimary = Color.White,
@@ -51,7 +50,6 @@ private val PixelGlitchColorScheme = darkColorScheme(
     onError = Color.Black
 )
 
-// NUEVO: Paleta "TierraGlitch" con tonos neutros y un toque de lila
 private val TierraGlitchColorScheme = darkColorScheme(
     primary = GlitchLila,
     onPrimary = Color.White,
