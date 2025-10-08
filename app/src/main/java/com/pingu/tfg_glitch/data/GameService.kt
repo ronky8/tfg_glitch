@@ -635,7 +635,6 @@ class GameService {
 
                 player.money += totalEarned
 
-                // NEW: Increment the counter for the passive ability
                 if (player.granjero?.id == "comerciante_sombrio") {
                     player.cropsSoldThisMarketPhase += quantity
                 }
